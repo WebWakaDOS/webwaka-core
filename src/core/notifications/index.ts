@@ -6,6 +6,8 @@
  * Implements event-driven email, SMS, and push notification dispatchers.
  */
 
+import { logger } from '../logger';
+
 export interface NotificationPayload {
   tenantId: string;
   userId: string;
@@ -118,7 +120,11 @@ export class NotificationService {
    * Sends a push notification (Mock implementation for now)
    */
   private async sendPush(payload: NotificationPayload): Promise<boolean> {
-    console.log(`[Tenant: ${payload.tenantId}] Push notification sent to ${payload.recipient}: ${payload.body}`);
+    logger.info('Push notification sent', {
+      tenantId: payload.tenantId,
+      recipient: payload.recipient,
+      body: payload.body,
+    });
     return true;
   }
 }
