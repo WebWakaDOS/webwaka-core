@@ -54,3 +54,6 @@ export * from './core/chat/index.js';
 
 // ─── Booking ─────────────────────────────────────────────────────────────────
 export * from './core/booking/index.js';
+
+// ─── Event Bus ───────────────────────────────────────────────────────────────
+export * from './core/event-bus/index.js';

@@ -25,6 +25,10 @@
     "./logger": {
       "import": "./dist/core/logger/index.js",
       "types": "./dist/core/logger/index.d.ts"
+    },
+    "./event-bus": {
+      "import": "./dist/core/event-bus/index.js",
+      "types": "./dist/core/event-bus/index.d.ts"
     }
   },
   "scripts": {
