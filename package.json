@@ -1,0 +1,67 @@
+{
+  "name": "@webwaka/core",
+  "version": "1.0.0",
+  "description": "WebWaka OS v4 — Shared platform primitives: auth, RBAC, CORS, rate-limiting, event bus types, and billing utilities.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./auth": {
+      "import": "./dist/core/auth/index.js",
+      "types": "./dist/core/auth/index.d.ts"
+    },
+    "./rbac": {
+      "import": "./dist/core/rbac/index.js",
+      "types": "./dist/core/rbac/index.d.ts"
+    },
+    "./billing": {
+      "import": "./dist/core/billing/index.js",
+      "types": "./dist/core/billing/index.d.ts"
+    },
+    "./logger": {
+      "import": "./dist/core/logger/index.js",
+      "types": "./dist/core/logger/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "pnpm run build"
+  },
+  "peerDependencies": {
+    "hono": ">=4.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260317.1",
+    "hono": "^4.12.9",
+    "typescript": "^5.9.3",
+    "vitest": "^1.6.1"
+  },
+  "files": [
+    "dist",
+    "src",
+    "CHANGELOG.md"
+  ],
+  "keywords": [
+    "webwaka",
+    "cloudflare-workers",
+    "auth",
+    "jwt",
+    "rbac",
+    "hono",
+    "nigeria",
+    "africa",
+    "saas"
+  ],
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/WebWakaDOS/webwaka-core.git"
+  }
+}
