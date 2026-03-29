@@ -14,12 +14,17 @@ export interface LogContext {
   [key: string]: any;
 }
 
+export interface SerializedError {
+  message: string;
+  stack?: string | undefined;
+}
+
 export interface LogEntry {
   timestamp: string;
   level: 'info' | 'warn' | 'error' | 'debug';
   message: string;
   context?: LogContext;
-  error?: Error;
+  error?: SerializedError;
 }
 
 /**
@@ -32,7 +37,7 @@ export interface LogEntry {
  *   logger.debug("Cache hit", { tenantId: "tenant-123", key: "user-profile" });
  */
 class PlatformLogger {
-  private isDevelopment = typeof process !== 'undefined' && process.env?.NODE_ENV === 'development';
+  private isDevelopment = (typeof globalThis !== 'undefined' && (globalThis as any).DEV_MODE === true);
 
   /**
    * Log informational message
@@ -86,8 +91,8 @@ class PlatformLogger {
       timestamp: new Date().toISOString(),
       level,
       message,
-      context,
-      error: error ? { message: error.message, stack: error.stack } : undefined,
+      ...(context !== undefined ? { context } : {}),
+      ...(error !== undefined ? { error: { message: error.message, stack: error.stack } } : {}),
     };
 
     // In production, this would send to a logging service (e.g., Datadog, Sentry)
