@@ -39,6 +39,20 @@ src/
 
 The "Start application" workflow runs `pnpm run build && pnpm run test` — compiles the library and runs all 61 unit tests.
 
+## Changes & Improvements
+
+### Security Audit Pass (notifications + billing)
+- **notifications/index.ts**: Replaced all bare `console.warn`/`console.error` calls with the platform `logger` — enforcing the "Zero Console Logs" invariant across the entire module
+- **billing/index.ts**: Replaced `private db: any` and `constructor(db: any)` with the proper `D1Database` global type — eliminating all `any` usage and enforcing the "No `any` types" rule; `metadata` type narrowed from `Record<string, any>` to `Record<string, unknown>`
+
+### Vitest Coverage Enforcement
+- `vitest.config.ts` now sets `all: true` (all source files included, even if not imported by tests) and 100% thresholds on statements, branches, functions, and lines
+
+### GitHub Actions
+- `.github/workflows/publish.yml`: New workflow — triggers on version tags (`v*.*.*`), runs lint → test → build → `pnpm publish` with `NPM_TOKEN` secret; isolated to `npm-publish` environment
+- `.github/workflows/ci.yml`: Fixed from broken `npm ci` → correct `pnpm install --frozen-lockfile`; added type-check and build steps
+- `.github/workflows/deploy.yml`: Same pnpm fix; added lint + build steps before release
+
 ## Bug Fixes Applied During Import
 
 1. **billing/index.ts**: Fixed `exactOptionalPropertyTypes` TS error for optional `metadata` field using spread

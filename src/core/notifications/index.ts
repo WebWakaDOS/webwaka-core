@@ -51,7 +51,9 @@ export class NotificationService {
    */
   private async sendEmail(payload: NotificationPayload): Promise<boolean> {
     if (!this.config.yournotifyApiKey) {
-      console.warn(`[Tenant: ${payload.tenantId}] Yournotify API key missing. Email not sent to ${payload.recipient}`);
+      logger.warn(`Yournotify API key missing. Email not sent to ${payload.recipient}`, {
+        tenantId: payload.tenantId,
+      });
       return false;
     }
 
@@ -75,7 +77,7 @@ export class NotificationService {
 
       return true;
     } catch (error) {
-      console.error(`Failed to send email via Yournotify:`, error);
+      logger.error('Failed to send email via Yournotify', { tenantId: payload.tenantId }, error instanceof Error ? error : new Error(String(error)));
       return false;
     }
   }
@@ -85,7 +87,9 @@ export class NotificationService {
    */
   private async sendSms(payload: NotificationPayload): Promise<boolean> {
     if (!this.config.termiiApiKey) {
-      console.warn(`[Tenant: ${payload.tenantId}] Termii API key missing. SMS not sent to ${payload.recipient}`);
+      logger.warn(`Termii API key missing. SMS not sent to ${payload.recipient}`, {
+        tenantId: payload.tenantId,
+      });
       return false;
     }
 
@@ -111,7 +115,7 @@ export class NotificationService {
 
       return true;
     } catch (error) {
-      console.error(`Failed to send SMS via Termii:`, error);
+      logger.error('Failed to send SMS via Termii', { tenantId: payload.tenantId }, error instanceof Error ? error : new Error(String(error)));
       return false;
     }
   }
