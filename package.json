@@ -29,6 +29,34 @@
     "./events": {
       "import": "./dist/core/events/index.js",
       "types": "./dist/core/events/index.d.ts"
+    },
+    "./ai": {
+      "import": "./dist/core/ai/AIEngine.js",
+      "types": "./dist/core/ai/AIEngine.d.ts"
+    },
+    "./notifications": {
+      "import": "./dist/core/notifications/index.js",
+      "types": "./dist/core/notifications/index.d.ts"
+    },
+    "./kyc": {
+      "import": "./dist/core/kyc/index.js",
+      "types": "./dist/core/kyc/index.d.ts"
+    },
+    "./geolocation": {
+      "import": "./dist/core/geolocation/index.js",
+      "types": "./dist/core/geolocation/index.d.ts"
+    },
+    "./document": {
+      "import": "./dist/core/document/index.js",
+      "types": "./dist/core/document/index.d.ts"
+    },
+    "./chat": {
+      "import": "./dist/core/chat/index.js",
+      "types": "./dist/core/chat/index.d.ts"
+    },
+    "./booking": {
+      "import": "./dist/core/booking/index.js",
+      "types": "./dist/core/booking/index.d.ts"
     }
   },
   "scripts": {

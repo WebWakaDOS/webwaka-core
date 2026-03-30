@@ -23,6 +23,7 @@
 
 import type { Context, MiddlewareHandler, Next } from 'hono';
 import { cors } from 'hono/cors';
+import { logger } from '../logger/index.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,6 +63,34 @@ export interface AuthEnv {
 // ─── JWT Utilities ────────────────────────────────────────────────────────────
 
 /**
+ * Encodes a string as a URL-safe Base64 string (no padding).
+ * Uses TextEncoder so any Unicode content (accented chars, CJK, Arabic, etc.)
+ * is first converted to UTF-8 bytes before btoa — avoiding InvalidCharacterError.
+ */
+function toBase64Url(str: string): string {
+  const bytes = new TextEncoder().encode(str);
+  let binary = '';
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+}
+
+/**
+ * Decodes a URL-safe Base64 string back to its original UTF-8 string.
+ * Inverse of toBase64Url — required for verifying payloads that contain Unicode.
+ */
+function fromBase64Url(b64url: string): string {
+  const padded = b64url.replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+/**
  * Sign a new HS256 JWT using the Web Crypto API (Cloudflare Workers compatible).
  * Returns a compact `header.payload.signature` string.
  */
@@ -78,14 +107,12 @@ export async function signJWT(
   };
 
   const header = { alg: 'HS256', typ: 'JWT' };
+  // Header is always ASCII — btoa is fine; payload uses Unicode-safe toBase64Url
   const headerB64 = btoa(JSON.stringify(header))
     .replace(/=/g, '')
     .replace(/\+/g, '-')
     .replace(/\//g, '_');
-  const payloadB64 = btoa(JSON.stringify(fullPayload))
-    .replace(/=/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
+  const payloadB64 = toBase64Url(JSON.stringify(fullPayload));
 
   const encoder = new TextEncoder();
   const keyData = encoder.encode(secret);
@@ -141,9 +168,7 @@ export async function verifyJWT(
     const valid = await crypto.subtle.verify('HMAC', key, signature, data);
     if (!valid) return null;
 
-    const payload = JSON.parse(
-      atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/'))
-    ) as JWTPayload;
+    const payload = JSON.parse(fromBase64Url(payloadB64)) as JWTPayload;
 
     // Reject expired tokens
     if (payload.exp < Math.floor(Date.now() / 1000)) return null;
@@ -385,7 +410,7 @@ export function rateLimit(options: RateLimitOptions = {}): MiddlewareHandler<{ B
     const kv = c.env.RATE_LIMIT_KV;
     if (!kv) {
       // If KV is not configured, fail open (do not block) but log a warning
-      console.warn('[rateLimit] RATE_LIMIT_KV binding not configured — rate limiting disabled');
+      logger.warn('[rateLimit] RATE_LIMIT_KV binding not configured — rate limiting disabled');
       return next();
     }
 
