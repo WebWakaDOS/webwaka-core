@@ -223,7 +223,10 @@ export class AIEngine {
     }
 
     const data = await response.json() as any;
-    const content: string = data.choices[0]?.message?.content ?? '';
+    const content: string | undefined = data.choices?.[0]?.message?.content;
+    if (typeof content !== 'string') {
+      throw new Error('OpenRouter returned an unexpected response structure (missing choices[0].message.content)');
+    }
     return { text: content, provider, modelUsed: model };
   }
 

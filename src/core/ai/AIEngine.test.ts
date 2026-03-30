@@ -220,6 +220,60 @@ describe('CORE-5: AIEngine (Vendor Neutral AI)', () => {
     expect(global.fetch).toHaveBeenCalledTimes(3);
   });
 
+  it('should throw (and trigger retry/fallback) when OpenRouter returns malformed payload', async () => {
+    // Engine with maxRetries: 0 so it escalates immediately after one bad response
+    // Tier 1: returns HTTP 200 but with missing choices structure → should throw → fallback
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ result: 'unexpected shape' }), // no choices array
+    });
+
+    // Tier 2: also returns malformed payload → throws → escalates to Tier 3
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({}), // completely empty
+    });
+
+    // Tier 3 CF AI succeeds
+    const response = await aiEngine.execute(
+      { prompt: 'Hello', tenantId: 'tenant-1' },
+      { openRouterKey: 'tenant-key-456' }
+    );
+
+    expect(response.provider).toBe('cloudflare-ai');
+    expect(mockCloudflareAi.run).toHaveBeenCalledTimes(1);
+  });
+
+  it('should retry Tier 1 on malformed payload before escalating (maxRetries: 1)', async () => {
+    const retryEngine = new AIEngine('platform-key-123', mockCloudflareAi, {
+      maxRetries: 1,
+      backoffMs: 0,
+    });
+    vi.spyOn(retryEngine as any, 'sleep').mockResolvedValue(undefined);
+
+    // Tier 1: attempt 1 → malformed, attempt 2 (retry) → valid
+    (global.fetch as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ bad: 'payload' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'Recovered after retry' } }],
+        }),
+      });
+
+    const response = await retryEngine.execute(
+      { prompt: 'Hello', tenantId: 'tenant-1' },
+      { openRouterKey: 'tenant-key-456' }
+    );
+
+    expect(response.provider).toBe('tenant-openrouter');
+    expect(response.text).toBe('Recovered after retry');
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
   // ─── executeStream tests ───────────────────────────────────────────────────
 
   it('should return a ReadableStream from executeStream (Tier 1 success)', async () => {
@@ -271,6 +325,32 @@ describe('CORE-5: AIEngine (Vendor Neutral AI)', () => {
     expect(stream).toBeInstanceOf(ReadableStream);
     expect(stream).toBe(mockBody);
     expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('should exhaust Tier 1 stream retries before falling to Tier 2 stream (maxRetries: 1)', async () => {
+    const retryEngine = new AIEngine('platform-key-123', mockCloudflareAi, {
+      maxRetries: 1,
+      backoffMs: 0,
+    });
+    vi.spyOn(retryEngine as any, 'sleep').mockResolvedValue(undefined);
+
+    const mockBody = new ReadableStream<Uint8Array>();
+
+    // Tier 1: 2 attempts (initial + 1 retry), both fail
+    (global.fetch as any)
+      .mockRejectedValueOnce(new Error('stream fail'))
+      .mockRejectedValueOnce(new Error('stream fail'))
+      // Tier 2: succeeds
+      .mockResolvedValueOnce({ ok: true, body: mockBody });
+
+    const stream = await retryEngine.executeStream(
+      { prompt: 'Hello', tenantId: 'tenant-1' },
+      { openRouterKey: 'tenant-key' }
+    );
+
+    expect(stream).toBeInstanceOf(ReadableStream);
+    expect(stream).toBe(mockBody);
+    expect(global.fetch).toHaveBeenCalledTimes(3);
   });
 
   it('should fall back to Cloudflare AI single-chunk stream if all OpenRouter stream attempts fail', async () => {
