@@ -10,46 +10,6 @@
  */
 
 /**
- * Envelope wrapping every domain event published on the platform bus.
- *
- * @template T  The event-specific payload type.
- */
-export interface DomainEvent<T = unknown> {
-  /** Unique event identifier (UUID v4). */
-  id: string;
-  /** Canonical event type from WebWakaEventType. */
-  type: string;
-  /** The tenant that owns this event. */
-  tenantId: string;
-  /** Wall-clock time the event was created. */
-  occurredAt: Date;
-  /** Domain-specific payload. */
-  payload: T;
-}
-
-/**
- * Factory that creates a well-formed DomainEvent with a generated id and
- * current timestamp.
- *
- * @param type      One of the WebWakaEventType constants.
- * @param tenantId  Tenant that owns the event.
- * @param payload   Domain-specific payload.
- */
-export function createEvent<T>(
-  type: string,
-  tenantId: string,
-  payload: T
-): DomainEvent<T> {
-  return {
-    id: crypto.randomUUID(),
-    type,
-    tenantId,
-    occurredAt: new Date(),
-    payload,
-  };
-}
-
-/**
  * Well-known event type names for all WebWaka OS v4 domains.
  *
  * Consumers MUST use these constants — never raw string literals — so that
@@ -85,4 +45,47 @@ export enum WebWakaEventType {
   // ─── Notification ──────────────────────────────────────────────────────────
   NOTIFICATION_SENT = 'notification.sent',
   NOTIFICATION_FAILED = 'notification.failed',
+}
+
+/**
+ * Envelope wrapping every domain event published on the platform bus.
+ *
+ * `type` is constrained to `WebWakaEventType` — arbitrary strings are rejected
+ * at compile time, preventing undeclared event names from entering the bus.
+ *
+ * @template T  The event-specific payload type.
+ */
+export interface DomainEvent<T = unknown> {
+  /** Unique event identifier (UUID v4). */
+  id: string;
+  /** Canonical event type — must be a WebWakaEventType constant. */
+  type: WebWakaEventType;
+  /** The tenant that owns this event. */
+  tenantId: string;
+  /** Wall-clock time the event was created. */
+  occurredAt: Date;
+  /** Domain-specific payload. */
+  payload: T;
+}
+
+/**
+ * Factory that creates a well-formed DomainEvent with a generated id and
+ * current timestamp.
+ *
+ * @param type      A WebWakaEventType constant.
+ * @param tenantId  Tenant that owns the event.
+ * @param payload   Domain-specific payload.
+ */
+export function createEvent<T>(
+  type: WebWakaEventType,
+  tenantId: string,
+  payload: T
+): DomainEvent<T> {
+  return {
+    id: crypto.randomUUID(),
+    type,
+    tenantId,
+    occurredAt: new Date(),
+    payload,
+  };
 }
