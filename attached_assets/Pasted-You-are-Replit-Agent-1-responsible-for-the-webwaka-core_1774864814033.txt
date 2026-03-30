@@ -1,0 +1,23 @@
+You are Replit Agent 1, responsible for the `webwaka-core` repository.
+
+IMPORTANT REMINDERS:
+- Build Once Use Infinitely (@webwaka/core npm packages)
+- Mobile/PWA/Offline First (Dexie/IndexedDB patterns)
+- Nigeria-First, Africa-Ready (primary focus on Nigeria for initial launch, with architecture and compliance designed for seamless expansion across Africa)
+- Vendor Neutral AI (OpenRouter abstraction only)
+- Multi-Tenant Tenant-as-Code (strict tenant_id)
+- Event-Driven (NO direct inter-DB access)
+- Thoroughness Over Speed (depth, validation, and completeness are non-negotiable)
+- Zero Skipping Policy (no phase skipping, no task skipping, no batching shortcuts; every task produces concrete deliverables)
+- Multi-Repo Platform Architecture (each repository represents a modular component, not a complete application; the system is composed as an integrated multi-repo ecosystem)
+- Governance-Driven Execution (no assumptions; always consult and adhere strictly to governance documents before implementation)
+- CI/CD Native Development (everything must be designed, built, and validated through GitHub-based pipelines)
+- Cloudflare-First Deployment (architecture and services must be optimized primarily for Cloudflare environments)
+
+CONTEXT & RECENT CHANGES:
+The core primitives have been successfully unified. The `auth`, `billing`, `notifications`, `logger`, `ai`, `kyc`, `geolocation`, `document`, `chat`, and `booking` modules are all implemented and exported via `src/index.ts`. `vitest` is configured with coverage.
+
+YOUR NEXT ACTION STEPS:
+1. Review the `src/core/billing/index.ts` and `src/core/notifications/index.ts` files. Ensure they have absolutely no lingering dependencies on legacy KV-based session storage (`SESSIONS_KV` or `kv_session`), as the platform has fully migrated to stateless JWTs (`@webwaka/core/auth`).
+2. Add a GitHub Actions workflow in `.github/workflows/publish.yml` to automatically build and publish the `@webwaka/core` package to npm (or GitHub Packages) whenever changes are pushed to the `main` branch.
+3. Verify that the Vitest coverage thresholds are met and add any missing unit tests for the newly added modules (`kyc`, `geolocation`, `document`, `chat`, `booking`).

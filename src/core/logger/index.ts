@@ -14,12 +14,17 @@ export interface LogContext {
   [key: string]: any;
 }
 
+export interface SerializedError {
+  message: string;
+  stack?: string;
+}
+
 export interface LogEntry {
   timestamp: string;
   level: 'info' | 'warn' | 'error' | 'debug';
   message: string;
   context?: LogContext;
-  error?: Error;
+  error?: SerializedError;
 }
 
 /**
@@ -82,19 +87,23 @@ class PlatformLogger {
     context?: LogContext,
     error?: Error
   ): void {
+    const serializedError: SerializedError | undefined = error !== undefined
+      ? { message: error.message, ...(error.stack !== undefined ? { stack: error.stack } : {}) }
+      : undefined;
+
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
       level,
       message,
       ...(context !== undefined ? { context } : {}),
-      ...(error !== undefined ? { error } : {}),
+      ...(serializedError !== undefined ? { error: serializedError } : {}),
     };
 
     // In production, this would send to a logging service (e.g., Datadog, Sentry)
     // For now, we output to stderr to avoid stdout pollution
     if (typeof console !== 'undefined') {
       const output = JSON.stringify(entry);
-      
+
       switch (level) {
         case 'error':
           console.error(output);
