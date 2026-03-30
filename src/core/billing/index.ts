@@ -2,9 +2,11 @@
  * CORE-8: Platform Billing & Usage Ledger
  * Blueprint Reference: Part 10.1 (Central Management & Economics)
  * Blueprint Reference: Part 9.1 #6 (Africa First - Integer Kobo Values)
- * 
- * Implements internal ledger for tracking tenant API/AI usage.
+ *
+ * Implements internal ledger for tracking tenant API/AI usage and credits.
  */
+
+import { logger } from '../logger';
 
 export enum LedgerEntryType {
   CREDIT = 'CREDIT',
@@ -15,7 +17,8 @@ export enum UsageCategory {
   AI_TOKENS = 'AI_TOKENS',
   SMS_SENT = 'SMS_SENT',
   EMAIL_SENT = 'EMAIL_SENT',
-  SUBSCRIPTION_FEE = 'SUBSCRIPTION_FEE'
+  SUBSCRIPTION_FEE = 'SUBSCRIPTION_FEE',
+  SUBSCRIPTION_CREDIT = 'SUBSCRIPTION_CREDIT'
 }
 
 export interface LedgerEntry {
@@ -30,6 +33,13 @@ export interface LedgerEntry {
   deletedAt?: Date; // Soft deletes
 }
 
+/** Shared kobo validation used by both debit and credit paths. */
+function validateKobo(amountKobo: number): void {
+  if (!Number.isInteger(amountKobo) || amountKobo < 0) {
+    throw new Error('Amount must be a positive integer in kobo');
+  }
+}
+
 export class BillingLedger {
   private db: any; // Type would be D1Database from @cloudflare/workers-types
 
@@ -41,15 +51,13 @@ export class BillingLedger {
    * Records a usage debit for a tenant.
    */
   async recordUsage(
-    tenantId: string, 
-    category: UsageCategory, 
-    amountKobo: number, 
+    tenantId: string,
+    category: UsageCategory,
+    amountKobo: number,
     description: string,
     metadata?: Record<string, any>
   ): Promise<LedgerEntry> {
-    if (!Number.isInteger(amountKobo) || amountKobo < 0) {
-      throw new Error('Amount must be a positive integer in kobo');
-    }
+    validateKobo(amountKobo);
 
     const entry: LedgerEntry = {
       id: crypto.randomUUID(),
@@ -59,23 +67,66 @@ export class BillingLedger {
       amountKobo,
       description,
       ...(metadata !== undefined ? { metadata } : {}),
-      createdAt: new Date()
+      createdAt: new Date(),
     };
 
-    // In a real implementation, this would insert into D1
+    // In a real implementation, this would insert into D1:
     // await this.db.prepare('INSERT INTO ledger_entries ...').bind(...).run();
-    
+
+    return entry;
+  }
+
+  /**
+   * Records a credit for a tenant (wallet top-up, refund, promotional credit,
+   * or subscription payment).
+   */
+  async recordCredit(
+    tenantId: string,
+    category: UsageCategory,
+    amountKobo: number,
+    description: string,
+    metadata?: Record<string, any>
+  ): Promise<LedgerEntry> {
+    validateKobo(amountKobo);
+
+    const entry: LedgerEntry = {
+      id: crypto.randomUUID(),
+      tenantId,
+      type: LedgerEntryType.CREDIT,
+      category,
+      amountKobo,
+      description,
+      ...(metadata !== undefined ? { metadata } : {}),
+      createdAt: new Date(),
+    };
+
+    // In a real implementation, this would insert into D1:
+    // await this.db.prepare('INSERT INTO ledger_entries ...').bind(...).run();
+
     return entry;
   }
 
   /**
    * Calculates the current balance for a tenant.
+   *
+   * @stub This implementation always returns 0. Real balance calculation
+   * requires D1 database wiring (separate task). Any caller that gates
+   * actions on this value will silently allow unlimited usage until
+   * D1 integration is complete.
    */
   async getTenantBalance(tenantId: string): Promise<number> {
-    // In a real implementation, this would query D1
-    // const result = await this.db.prepare('SELECT SUM(CASE WHEN type = "CREDIT" THEN amountKobo ELSE -amountKobo END) as balance FROM ledger_entries WHERE tenantId = ? AND deletedAt IS NULL').bind(tenantId).first();
-    // return result.balance || 0;
-    
-    return 0; // Mock return
+    logger.warn(
+      'getTenantBalance is a stub and always returns 0. D1 integration is required for real balance calculation.',
+      { tenantId }
+    );
+
+    // Real implementation:
+    // const result = await this.db.prepare(
+    //   'SELECT SUM(CASE WHEN type = "CREDIT" THEN amountKobo ELSE -amountKobo END) as balance ' +
+    //   'FROM ledger_entries WHERE tenantId = ? AND deletedAt IS NULL'
+    // ).bind(tenantId).first();
+    // return result.balance ?? 0;
+
+    return 0;
   }
 }
