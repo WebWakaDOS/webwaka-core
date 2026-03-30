@@ -134,8 +134,9 @@ export class AIEngine {
       if (tier2Result !== null) return tier2Result;
     }
 
-    // Tier 3: Cloudflare AI — wrap non-streaming response in a single-chunk stream
-    const fallback = await this.callCloudflareAI(request.prompt);
+    // Tier 3: Cloudflare AI — wrap non-streaming execute() result in a single-chunk stream
+    // (CF AI does not support native streaming; this keeps fallback logic in one place)
+    const fallback = await this.execute(request, tenantConfig);
     const encoder = new TextEncoder();
     const chunk = encoder.encode(fallback.text);
     return new ReadableStream<Uint8Array>({
