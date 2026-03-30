@@ -51,6 +51,8 @@ export class ChatEngine {
     this.channels.set(channel.id, channel);
     this.messages.set(channel.id, []);
 
+    // eventBus.publish(WebWakaEventType.CHAT_CHANNEL_CREATED, createEvent(WebWakaEventType.CHAT_CHANNEL_CREATED, tenantId, channel));
+
     return channel;
   }
 
@@ -88,7 +90,7 @@ export class ChatEngine {
     channelMessages.push(message);
     this.messages.set(channelId, channelMessages);
 
-    // eventBus.publish(WebWakaEventType.CHAT_MESSAGE_SENT, message);
+    // eventBus.publish(WebWakaEventType.CHAT_MESSAGE_SENT, createEvent(WebWakaEventType.CHAT_MESSAGE_SENT, tenantId, message));
 
     return message;
   }

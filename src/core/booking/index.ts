@@ -65,6 +65,9 @@ export class BookingEngine {
     };
 
     this.bookings.push(newBooking);
+
+    // eventBus.publish(WebWakaEventType.BOOKING_CONFIRMED, createEvent(WebWakaEventType.BOOKING_CONFIRMED, tenantId, newBooking));
+
     return newBooking;
   }
 
@@ -78,6 +81,9 @@ export class BookingEngine {
     );
     if (booking) {
       booking.status = 'cancelled';
+
+      // eventBus.publish(WebWakaEventType.BOOKING_CANCELLED, createEvent(WebWakaEventType.BOOKING_CANCELLED, tenantId, booking));
+
       return true;
     }
     return false;
