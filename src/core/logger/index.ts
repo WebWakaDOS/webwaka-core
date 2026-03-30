@@ -32,7 +32,7 @@ export interface LogEntry {
  *   logger.debug("Cache hit", { tenantId: "tenant-123", key: "user-profile" });
  */
 class PlatformLogger {
-  private isDevelopment = typeof process !== 'undefined' && process.env?.NODE_ENV === 'development';
+  private isDevelopment = (globalThis as any).process?.env?.NODE_ENV === 'development';
 
   /**
    * Log informational message
@@ -86,8 +86,8 @@ class PlatformLogger {
       timestamp: new Date().toISOString(),
       level,
       message,
-      context,
-      error: error ? { message: error.message, stack: error.stack } : undefined,
+      ...(context !== undefined ? { context } : {}),
+      ...(error !== undefined ? { error } : {}),
     };
 
     // In production, this would send to a logging service (e.g., Datadog, Sentry)

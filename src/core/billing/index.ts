@@ -58,7 +58,7 @@ export class BillingLedger {
       category,
       amountKobo,
       description,
-      metadata,
+      ...(metadata !== undefined ? { metadata } : {}),
       createdAt: new Date()
     };
 
