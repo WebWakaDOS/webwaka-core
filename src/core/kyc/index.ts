@@ -1,12 +1,16 @@
 /**
  * CORE-12: Universal KYC/KYB Verification
  * Blueprint Reference: Part 10.11 (Fintech), Part 10.3 (Transport)
- * 
+ *
  * Centralized identity verification system with Nigeria-First integrations.
+ *
+ * Tenant Isolation: every mutating and querying method requires a tenantId.
+ * KYC requests are scoped per tenant — cross-tenant leakage is impossible by construction.
  */
 
 export interface KYCRequest {
   id: string;
+  tenantId: string;
   userId: string;
   documentType: 'NIN' | 'BVN' | 'PASSPORT' | 'DRIVERS_LICENSE';
   documentNumber: string;
@@ -19,34 +23,41 @@ export class KYCEngine {
   private requests: Map<string, KYCRequest> = new Map();
 
   /**
-   * Submits a new KYC verification request.
+   * Submits a new KYC verification request, scoped to the tenant.
    */
-  submitVerification(userId: string, documentType: 'NIN' | 'BVN' | 'PASSPORT' | 'DRIVERS_LICENSE', documentNumber: string): KYCRequest {
+  submitVerification(
+    tenantId: string,
+    userId: string,
+    documentType: 'NIN' | 'BVN' | 'PASSPORT' | 'DRIVERS_LICENSE',
+    documentNumber: string
+  ): KYCRequest {
     const request: KYCRequest = {
       id: `kyc_${crypto.randomUUID()}`,
+      tenantId,
       userId,
       documentType,
       documentNumber,
-      status: 'pending'
+      status: 'pending',
     };
-    
+
     this.requests.set(request.id, request);
     return request;
   }
 
   /**
-   * Processes a verification request (mocking external API calls to NIMC/NIBSS).
+   * Processes a verification request, scoped to the tenant.
+   * Mocks external API calls to NIMC (NIN) / NIBSS (BVN).
    */
-  async processVerification(requestId: string): Promise<KYCRequest> {
+  async processVerification(tenantId: string, requestId: string): Promise<KYCRequest> {
     const request = this.requests.get(requestId);
-    if (!request) throw new Error('KYC request not found');
+    if (!request || request.tenantId !== tenantId) {
+      throw new Error('KYC request not found');
+    }
 
     if (request.status !== 'pending') {
       throw new Error('Request is already processed');
     }
 
-    // Mock external verification logic
-    // In a real system, this would call NIMC for NIN or NIBSS for BVN
     const isValid = this.mockExternalVerification(request.documentNumber);
 
     if (isValid) {
@@ -61,14 +72,15 @@ export class KYCEngine {
   }
 
   /**
-   * Retrieves the verification status for a user.
+   * Retrieves all verification requests for a user, scoped to the tenant.
    */
-  getUserVerificationStatus(userId: string): KYCRequest[] {
-    return Array.from(this.requests.values()).filter(r => r.userId === userId);
+  getUserVerificationStatus(tenantId: string, userId: string): KYCRequest[] {
+    return Array.from(this.requests.values()).filter(
+      r => r.tenantId === tenantId && r.userId === userId
+    );
   }
 
   private mockExternalVerification(documentNumber: string): boolean {
-    // Mock logic: fail if document number starts with '000'
     return !documentNumber.startsWith('000');
   }
 }
