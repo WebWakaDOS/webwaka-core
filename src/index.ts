@@ -25,7 +25,7 @@ export {
   type RateLimitEnv,
   type JwtAuthOptions,
   type SecureCORSOptions,
-  type RateLimitOptions,
+  type RateLimitOptions as AuthRateLimitOptions,
 } from './core/auth/index.js';
 
 // ─── Billing ──────────────────────────────────────────────────────────────────

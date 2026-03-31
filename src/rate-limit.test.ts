@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { checkRateLimit } from './rate-limit.js';
+import { checkRateLimit, type RateLimitOptions } from './rate-limit.js';
 
 function createMockKV(): KVNamespace {
   const store = new Map<string, { value: string; expiresAt?: number }>();
@@ -40,7 +40,7 @@ describe('checkRateLimit()', () => {
   });
 
   it('allows requests under the limit', async () => {
-    const opts = { kv, key: 'user:1', maxRequests: 5, windowSeconds: 60 };
+    const opts: RateLimitOptions = { kv, key: 'user:1', maxRequests: 5, windowSeconds: 60 };
 
     const result = await checkRateLimit(opts);
     expect(result.allowed).toBe(true);
@@ -48,7 +48,7 @@ describe('checkRateLimit()', () => {
   });
 
   it('blocks requests once the limit is reached', async () => {
-    const opts = { kv, key: 'user:2', maxRequests: 3, windowSeconds: 60 };
+    const opts: RateLimitOptions = { kv, key: 'user:2', maxRequests: 3, windowSeconds: 60 };
 
     await checkRateLimit(opts);
     await checkRateLimit(opts);
@@ -60,7 +60,7 @@ describe('checkRateLimit()', () => {
   });
 
   it('counts remaining correctly as requests accumulate', async () => {
-    const opts = { kv, key: 'user:3', maxRequests: 5, windowSeconds: 60 };
+    const opts: RateLimitOptions = { kv, key: 'user:3', maxRequests: 5, windowSeconds: 60 };
 
     const r1 = await checkRateLimit(opts);
     expect(r1.remaining).toBe(4);
@@ -73,7 +73,7 @@ describe('checkRateLimit()', () => {
   });
 
   it('allows exactly maxRequests requests before blocking', async () => {
-    const opts = { kv, key: 'user:4', maxRequests: 2, windowSeconds: 60 };
+    const opts: RateLimitOptions = { kv, key: 'user:4', maxRequests: 2, windowSeconds: 60 };
 
     const r1 = await checkRateLimit(opts);
     expect(r1.allowed).toBe(true);
@@ -85,10 +85,14 @@ describe('checkRateLimit()', () => {
     expect(r3.allowed).toBe(false);
   });
 
-  it('provides a resetAt timestamp in the future', async () => {
-    const opts = { kv, key: 'user:5', maxRequests: 5, windowSeconds: 60 };
+  it('provides resetAt as epoch milliseconds in the future', async () => {
+    const opts: RateLimitOptions = { kv, key: 'user:5', maxRequests: 5, windowSeconds: 60 };
 
+    const before = Date.now();
     const result = await checkRateLimit(opts);
-    expect(result.resetAt).toBeGreaterThan(Math.floor(Date.now() / 1000));
+
+    expect(result.resetAt).toBeGreaterThan(before);
+    expect(result.resetAt).toBeGreaterThan(Date.now() - 1000);
+    expect(result.resetAt % 1000).toBe(0);
   });
 });

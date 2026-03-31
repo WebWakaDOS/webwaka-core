@@ -1,4 +1,4 @@
-export interface KVRateLimitOptions {
+export interface RateLimitOptions {
   kv: KVNamespace;
   key: string;
   maxRequests: number;
@@ -11,12 +11,12 @@ export interface RateLimitResult {
   resetAt: number;
 }
 
-export async function checkRateLimit(opts: KVRateLimitOptions): Promise<RateLimitResult> {
+export async function checkRateLimit(opts: RateLimitOptions): Promise<RateLimitResult> {
   const { kv, key, maxRequests, windowSeconds } = opts;
 
   const nowSeconds = Math.floor(Date.now() / 1000);
   const windowStart = Math.floor(nowSeconds / windowSeconds) * windowSeconds;
-  const resetAt = windowStart + windowSeconds;
+  const resetAt = (windowStart + windowSeconds) * 1000;
   const kvKey = `rl:${key}:${windowStart}`;
 
   const raw = await kv.get(kvKey);

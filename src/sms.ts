@@ -31,7 +31,7 @@ export class TermiiProvider implements ISmsProvider {
   }
 
   async sendMessage(to: string, message: string): Promise<OtpResult> {
-    return this.deliver(to, message, 'sms');
+    return this.sendOtp(to, message, 'whatsapp');
   }
 
   private async deliver(to: string, message: string, channel: OtpChannel): Promise<OtpResult> {
