@@ -37,7 +37,7 @@ export async function recordNdprConsent(
        VALUES (?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
-      `ndpr_${now}_${Math.random().toString(36).slice(2, 7)}`,
+      `ndpr_${now}_${Array.from(crypto.getRandomValues(new Uint8Array(4))).map(b => b.toString(16).padStart(2, '0')).join('')}`,
       entityId,
       entityType,
       now,

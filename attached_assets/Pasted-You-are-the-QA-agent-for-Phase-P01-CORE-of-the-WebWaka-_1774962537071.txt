@@ -1,0 +1,62 @@
+You are the QA agent for Phase P01-CORE of the WebWaka platform.
+Target repo: @webwaka/core (packages/core/src/)
+
+Your job is to deeply verify that every task in P01-CORE was implemented correctly, find every bug or gap, and fix everything before declaring this phase verified. Do not skip any step.
+
+=== VERIFICATION CHECKLIST ===
+
+--- P01-T1: ID Generation Consolidation ---
+1. Read packages/core/src/index.ts. Confirm nanoid(prefix, length) is exported with a JSDoc comment mentioning Cloudflare Worker compatibility.
+2. Confirm export const genId = nanoid is also exported (backward-compat alias).
+3. Run: grep -r "genId" packages/core/src/ — should only appear as the alias assignment, nowhere else as a separate implementation.
+4. Run: grep -r "Math.random\|randomBytes\|uuid" packages/core/src/ — confirm no non-crypto random is used in ID generation.
+5. Invoke the function mentally: nanoid('trp', 16) — verify it would produce a string starting with 'trp' followed by at least 16 random characters.
+6. Confirm packages/core/package.json has had its version bumped (minor or patch).
+
+If any of these fail: fix the issue immediately before moving on.
+
+--- P01-T2: Shared Query Helpers ---
+1. Read packages/core/src/index.ts (or the query-helpers.ts it imports from). Confirm all three functions are exported: parsePagination, metaResponse, applyTenantScope.
+2. Verify parsePagination signature: accepts Record<string, string>, returns { limit: number; offset: number }. Confirm it caps limit at a configurable max (default 100) and floor-clamps offset at 0.
+3. Verify metaResponse signature: accepts (data: T[], total: number, limit: number, offset: number), returns an object with { data, meta: { total, limit, offset, has_more } }.
+4. Verify applyTenantScope signature: accepts (baseQuery: string, params: unknown[], tenantId: string, column?: string), returns { query: string; params: unknown[] }.
+5. Mental test of applyTenantScope:
+- Input: ('SELECT * FROM trips', [], 'op_123') → must return { query: 'SELECT * FROM trips WHERE operator_id = ?', params: ['op_123'] }
+- Input: ('SELECT * FROM trips WHERE state = ?', ['active'], 'op_123') → must return { query: '...WHERE state = ? AND operator_id = ?', params: ['active', 'op_123'] }
+6. Run: tsc --noEmit in packages/core/ — must pass with zero errors.
+
+If any fail: fix immediately.
+
+--- P01-T3: NDPR Consent Utility ---
+1. Read packages/core/src/ndpr.ts (or wherever the NDPR code lives). Confirm it exports: assertNdprConsent(body), recordNdprConsent(db, entityId, entityType, ipAddress, userAgent).
+2. Verify assertNdprConsent: throws an error when body.ndpr_consent is not exactly true (test: null, undefined, 'true' string, 0, false — all must throw).
+3. Verify the error thrown has a status property of 400 and a code of 'NDPR_CONSENT_REQUIRED'.
+4. Verify recordNdprConsent: constructs the correct SQL INSERT into ndpr_consent_log with all 7 required columns. Confirm the generated id is unique (uses timestamp + random).
+5. Confirm ndpr_consent_log table schema requires these columns: id, entity_id, entity_type, consented_at, ip_address, user_agent, created_at.
+6. Confirm assertNdprConsent and recordNdprConsent are both exported from packages/core/src/index.ts.
+7. Run tsc --noEmit — zero errors required.
+
+If any fail: fix immediately.
+
+--- P01-T4: API Key Authentication ---
+1. Read the verifyApiKey function. Confirm it:
+a. Accepts rawKey (string) and db (D1Database)
+b. Computes SHA-256 of the raw key using crypto.subtle.digest
+c. Converts the hash to lowercase hex
+d. Queries the api_keys table joining operators
+e. Returns null if no matching key or if revoked_at is set
+f. Non-blockingly updates last_used_at
+g. Returns a WakaUser object with role set based on scope ('read_write' → 'TENANT_ADMIN', else 'STAFF')
+2. Verify jwtAuthMiddleware was extended to detect 'ApiKey ' prefix in the Authorization header and call verifyApiKey instead of JWT verification.
+3. Confirm verifyApiKey is exported from packages/core/src/index.ts.
+4. Confirm WakaUser type includes tenant_id and operator_id fields. If missing: add them.
+5. Run tsc --noEmit — zero errors required.
+
+--- FINAL CHECKS ---
+1. Run tsc --noEmit one final time on the entire packages/core directory. Must show zero errors.
+2. Check that all four new exports (nanoid/genId, parsePagination/metaResponse/applyTenantScope, assertNdprConsent/recordNdprConsent, verifyApiKey/requireTierFeature) appear in the public exports of packages/core/src/index.ts.
+3. Confirm package.json version was bumped.
+4. If webwaka-transport imports @webwaka/core, run tsc --noEmit in webwaka-transport to confirm it still compiles after core changes.
+
+Report every issue found and every fix applied. Do not declare verified until tsc --noEmit passes with zero errors and every checklist item above is confirmed.
+```
