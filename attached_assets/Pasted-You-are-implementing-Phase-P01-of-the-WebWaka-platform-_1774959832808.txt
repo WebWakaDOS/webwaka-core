@@ -1,0 +1,169 @@
+You are implementing Phase P01 of the WebWaka platform implementation plan in the @webwaka/core package (packages/webwaka-core/).
+
+This phase creates all shared platform primitives that every other phase depends on. Nothing in webwaka-commerce, webwaka-logistics, or any other repo may proceed until this phase is complete.
+
+Read the existing file packages/webwaka-core/src/index.ts fully before starting. Do not break any existing exports.
+
+## Governance
+- Every export must be re-exported from packages/webwaka-core/src/index.ts
+- All code must be compatible with Cloudflare Workers (Web Crypto API, no Node.js-specific APIs)
+- No hardcoded provider keys — always accept credentials as constructor parameters
+- All TypeScript interfaces must be exported alongside their implementations
+- Follow the Build Once Use Infinitely (BOUI) principle: if logic could be used by more than one module, it belongs here
+
+## Tasks to implement in order:
+
+### TASK 1 — Tax Engine
+Create packages/webwaka-core/src/tax.ts
+
+Implement:
+- Interface TaxConfig { vatRate: number; vatRegistered: boolean; exemptCategories: string[] }
+- Interface TaxLineItem { category: string; amountKobo: number }
+- Interface TaxResult { subtotalKobo: number; vatKobo: number; totalKobo: number; vatBreakdown: { category: string; vatKobo: number }[] }
+- Class TaxEngine with method compute(items: TaxLineItem[]): TaxResult
+- For each item: skip VAT if category is in exemptCategories OR vatRegistered is false
+- Use Math.round() for kobo precision
+- Factory function createTaxEngine(config: TaxConfig): TaxEngine
+
+### TASK 2 — IPaymentProvider + Paystack Adapter + Refund Engine
+Create packages/webwaka-core/src/payment.ts
+
+Implement:
+- Interface ChargeResult { success: boolean; reference: string; amountKobo: number; error?: string }
+- Interface RefundResult { success: boolean; refundId: string; error?: string }
+- Interface SplitRecipient { subaccountCode: string; amountKobo: number }
+- Interface IPaymentProvider with methods:
+- verifyCharge(reference: string): Promise<ChargeResult>
+- initiateRefund(reference: string, amountKobo?: number): Promise<RefundResult>
+- initiateSplit(totalKobo: number, recipients: SplitRecipient[], reference: string): Promise<ChargeResult>
+- initiateTransfer(recipientCode: string, amountKobo: number, reference: string): Promise<{ success: boolean; transferCode: string; error?: string }>
+- Class PaystackProvider implementing IPaymentProvider (use fetch(), not axios)
+- verifyCharge: GET https://api.paystack.co/transaction/verify/${reference}
+- initiateRefund: POST https://api.paystack.co/refund
+- initiateTransfer: POST https://api.paystack.co/transfer
+- Factory function createPaymentProvider(secretKey: string): IPaymentProvider
+
+### TASK 3 — ISmsProvider / Unified OTP Delivery
+Create packages/webwaka-core/src/sms.ts
+
+Implement:
+- Type OtpChannel = 'sms' | 'whatsapp' | 'whatsapp_business'
+- Interface OtpResult { success: boolean; messageId?: string; channel: OtpChannel; error?: string }
+- Interface ISmsProvider with methods:
+- sendOtp(to: string, message: string, channel?: OtpChannel): Promise<OtpResult>
+- sendMessage(to: string, message: string): Promise<OtpResult>
+- Class TermiiProvider implementing ISmsProvider
+- Default channel: 'whatsapp'
+- Auto-fallback to 'sms' if WhatsApp delivery fails
+- Termii API endpoint: https://api.ng.termii.com/api/sms/send
+- Factory function createSmsProvider(apiKey: string, senderId?: string): ISmsProvider
+- Keep the existing sendTermiiSms function as a backwards-compatible wrapper (do not remove it)
+
+### TASK 4 — KV-Backed Rate Limiter
+Create packages/webwaka-core/src/rate-limit.ts
+
+Implement:
+- Interface RateLimitOptions { kv: KVNamespace; key: string; maxRequests: number; windowSeconds: number }
+- Interface RateLimitResult { allowed: boolean; remaining: number; resetAt: number }
+- Async function checkRateLimit(opts: RateLimitOptions): Promise<RateLimitResult>
+- Read current count from KV
+- If expired window: reset counter
+- If at limit: return allowed: false
+- Otherwise: increment and return allowed: true
+- Use KV TTL for automatic expiry
+
+### TASK 5 — Optimistic Locking Utility
+Create packages/webwaka-core/src/optimistic-lock.ts
+
+Implement:
+- Interface OptimisticLockResult { success: boolean; conflict: boolean; error?: string }
+- Async function updateWithVersionLock(db: D1Database, table: string, updates: Record<string, any>, where: { id: string; tenantId: string; expectedVersion: number }): Promise<OptimisticLockResult>
+- Build SQL: UPDATE {table} SET {updates}, version = version + 1, updatedAt = ? WHERE id = ? AND tenantId = ? AND version = ? AND deletedAt IS NULL
+- If meta.changes === 0: return { success: false, conflict: true }
+- Otherwise: return { success: true, conflict: false }
+
+### TASK 6 — PIN Hashing Utility
+Create packages/webwaka-core/src/pin.ts
+
+Implement using Web Crypto API only (no bcrypt or node:crypto):
+- Async function hashPin(pin: string, salt?: string): Promise<{ hash: string; salt: string }>
+- Generate salt if not provided: crypto.randomUUID()
+- Use PBKDF2 with SHA-256, 100,000 iterations
+- Return base64-encoded hash and the salt used
+- Async function verifyPin(pin: string, storedHash: string, salt: string): Promise<boolean>
+- Re-hash with stored salt and compare
+
+### TASK 7 — IKycProvider Interface Stub
+Create packages/webwaka-core/src/kyc.ts
+
+Implement:
+- Interface KycVerificationResult { verified: boolean; matchScore?: number; reason?: string; provider: string }
+- Interface IKycProvider with methods:
+- verifyBvn(bvnHash: string, firstName: string, lastName: string, dob: string): Promise<KycVerificationResult>
+- verifyNin(ninHash: string, firstName: string, lastName: string): Promise<KycVerificationResult>
+- verifyCac(rcNumber: string, businessName: string): Promise<KycVerificationResult>
+Note: Only the interface is needed now. Concrete implementations come in Phase P08.
+
+### TASK 8 — OpenRouter AI Abstraction (Vendor-Neutral AI)
+Create packages/webwaka-core/src/ai.ts
+
+Implement:
+- Interface AiMessage { role: 'system' | 'user' | 'assistant'; content: string }
+- Interface AiCompletionOptions { model?: string; messages: AiMessage[]; maxTokens?: number; temperature?: number }
+- Interface AiCompletionResult { content: string; model: string; tokensUsed: number; error?: string }
+- Class OpenRouterClient
+- Base URL: https://openrouter.ai/api/v1
+- Method complete(opts: AiCompletionOptions): Promise<AiCompletionResult>
+- Pass HTTP-Referer: 'https://webwaka.com' and X-Title: 'WebWaka Commerce' headers
+- Default model: 'openai/gpt-4o-mini'
+- Factory function createAiClient(apiKey: string, defaultModel?: string): OpenRouterClient
+
+### TASK 9 — CommerceEvents Constants Registry
+Create packages/webwaka-core/src/events.ts
+
+Implement:
+- Const object CommerceEvents with string values for all event types:
+INVENTORY_UPDATED: 'inventory.updated'
+ORDER_CREATED: 'order.created'
+ORDER_READY_DELIVERY: 'order.ready_for_delivery'
+PAYMENT_COMPLETED: 'payment.completed'
+PAYMENT_REFUNDED: 'payment.refunded'
+SHIFT_CLOSED: 'shift.closed'
+CART_ABANDONED: 'cart.abandoned'
+SUBSCRIPTION_CHARGE: 'subscription.charge_due'
+DELIVERY_QUOTE: 'delivery.quote'
+DELIVERY_STATUS: 'delivery.status_changed'
+VENDOR_KYC_SUBMITTED: 'vendor.kyc_submitted'
+VENDOR_KYC_APPROVED: 'vendor.kyc_approved'
+VENDOR_KYC_REJECTED: 'vendor.kyc_rejected'
+STOCK_ADJUSTED: 'stock.adjusted'
+DISPUTE_OPENED: 'dispute.opened'
+DISPUTE_RESOLVED: 'dispute.resolved'
+PURCHASE_ORDER_RECEIVED: 'purchase_order.received'
+FLASH_SALE_STARTED: 'flash_sale.started'
+FLASH_SALE_ENDED: 'flash_sale.ended'
+- Type CommerceEventType = typeof CommerceEvents[keyof typeof CommerceEvents]
+
+### TASK 10 — Update Index Barrel Exports
+Update packages/webwaka-core/src/index.ts to export everything from all 9 new files:
+- export * from './tax'
+- export * from './payment'
+- export * from './sms'
+- export * from './rate-limit'
+- export * from './optimistic-lock'
+- export * from './pin'
+- export * from './kyc'
+- export * from './ai'
+- export * from './events'
+Do not remove any existing exports.
+
+### TASK 11 — Bump Package Version
+Update packages/webwaka-core/package.json version from 1.1.0 to 1.2.0
+
+## Verification
+After completing all tasks:
+1. Run TypeScript type-check: npx tsc --noEmit
+2. Ensure all exports are accessible via import { TaxEngine, IPaymentProvider, ISmsProvider, checkRateLimit, updateWithVersionLock, hashPin, IKycProvider, OpenRouterClient, CommerceEvents } from '@webwaka/core'
+3. Write a basic unit test for TaxEngine.compute() verifying VAT calculation with and without exempt categories
+4. Write a basic unit test for checkRateLimit verifying it blocks after maxRequests
+```
