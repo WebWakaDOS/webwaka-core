@@ -13,6 +13,7 @@ export {
   signJWT,
   verifyJWT,
   jwtAuthMiddleware,
+  verifyApiKey,
   requireRole,
   requirePermissions,
   secureCORS,
@@ -21,6 +22,7 @@ export {
   getAuthUser,
   type JWTPayload,
   type AuthUser,
+  type WakaUser,
   type AuthEnv,
   type RateLimitEnv,
   type JwtAuthOptions,
@@ -84,3 +86,12 @@ export * from './ai.js';
 
 // ─── Commerce Events ─────────────────────────────────────────────────────────
 export * from './events.js';
+
+// ─── Nanoid / ID Generation ───────────────────────────────────────────────────
+export * from './nanoid.js';
+
+// ─── Query Helpers ────────────────────────────────────────────────────────────
+export * from './query-helpers.js';
+
+// ─── NDPR Consent ─────────────────────────────────────────────────────────────
+export * from './ndpr.js';

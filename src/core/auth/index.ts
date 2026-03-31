@@ -53,11 +53,26 @@ export interface AuthUser {
   permissions: string[];
 }
 
+/**
+ * User context for API key authenticated requests (B2B / third-party systems).
+ * Compatible with the 'user' context key set by jwtAuthMiddleware.
+ */
+export interface WakaUser {
+  id: string;
+  tenant_id: string;
+  role: string;
+  name: string;
+  phone: string;
+  operator_id: string;
+}
+
 export interface AuthEnv {
   JWT_SECRET: string;
   ENVIRONMENT?: string;
   /** Optional: KV namespace for rate-limiting counters */
   RATE_LIMIT_KV?: KVNamespace;
+  /** Optional: D1 database binding used by verifyApiKey */
+  DB?: D1Database;
 }
 
 // ─── JWT Utilities ────────────────────────────────────────────────────────────
@@ -179,6 +194,55 @@ export async function verifyJWT(
   }
 }
 
+// ─── API Key Authentication ───────────────────────────────────────────────────
+
+/**
+ * Verifies an API key by hashing it with SHA-256 and looking it up in the
+ * api_keys table. Returns a WakaUser on success or null if the key is invalid.
+ * Compatible with Cloudflare Workers (Web Crypto API only).
+ */
+export async function verifyApiKey(
+  rawKey: string,
+  db: D1Database
+): Promise<WakaUser | null> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(rawKey);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const keyHash = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+
+  const row = await db
+    .prepare(
+      `SELECT ak.*, o.name as operator_name FROM api_keys ak
+       JOIN operators o ON o.id = ak.operator_id
+       WHERE ak.key_hash = ? AND ak.revoked_at IS NULL AND ak.deleted_at IS NULL`
+    )
+    .bind(keyHash)
+    .first<{
+      id: string;
+      operator_id: string;
+      scope: string;
+      operator_name: string;
+    }>();
+
+  if (!row) return null;
+
+  // Non-blocking: update last_used_at
+  db.prepare(`UPDATE api_keys SET last_used_at = ? WHERE id = ?`)
+    .bind(Date.now(), row.id)
+    .run()
+    .catch(() => {});
+
+  return {
+    id: row.id,
+    tenant_id: row.operator_id,
+    role: row.scope === 'read_write' ? 'TENANT_ADMIN' : 'STAFF',
+    name: `api_key:${row.id}`,
+    phone: '',
+    operator_id: row.operator_id,
+  };
+}
+
 // ─── Hono Middleware: JWT Auth ────────────────────────────────────────────────
 
 export interface JwtAuthOptions {
@@ -218,8 +282,26 @@ export function jwtAuthMiddleware(
     );
     if (isPublic) return next();
 
-    const authHeader = c.req.header('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
+    const authHeader = c.req.header('Authorization') ?? '';
+
+    // ── API Key auth (B2B / third-party systems) ──────────────────────────────
+    if (authHeader.startsWith('ApiKey ')) {
+      const rawKey = authHeader.slice(7).trim();
+      const db = (c.env as any).DB as D1Database | undefined;
+      if (!db) {
+        return c.json({ success: false, error: 'Unauthorized: DB binding not configured' }, 401);
+      }
+      const wakaUser = await verifyApiKey(rawKey, db);
+      if (!wakaUser) {
+        return c.json({ error: 'Invalid API key' }, 401);
+      }
+      c.set('user' as never, wakaUser);
+      c.set('tenantId' as never, wakaUser.operator_id);
+      return next();
+    }
+
+    // ── JWT Bearer auth ───────────────────────────────────────────────────────
+    if (!authHeader.startsWith('Bearer ')) {
       return c.json(
         { success: false, error: 'Unauthorized: missing or malformed Authorization header' },
         401

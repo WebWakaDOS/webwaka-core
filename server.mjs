@@ -20,7 +20,7 @@ const html = `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <h1>@webwaka/core <span class="badge">v1.2.0</span></h1>
+  <h1>@webwaka/core <span class="badge">v1.3.0</span></h1>
   <p>WebWaka OS v4 — Shared platform primitives for building SaaS applications on the Cloudflare Workers ecosystem.</p>
 
   <h2>Core Modules</h2>
@@ -35,7 +35,7 @@ const html = `<!DOCTYPE html>
     <li><code>@webwaka/core/events</code> — Event bus primitives</li>
   </ul>
 
-  <h2>Phase P01 Primitives (v1.2.0)</h2>
+  <h2>Phase P01 Primitives (v1.3.0)</h2>
   <ul>
     <li><code>TaxEngine</code> — VAT computation with exempt category support (kobo precision)</li>
     <li><code>IPaymentProvider / PaystackProvider</code> — Charge verify, refund, split, transfer</li>

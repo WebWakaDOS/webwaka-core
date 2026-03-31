@@ -1,0 +1,156 @@
+You are implementing Phase P01-CORE of the WebWaka platform.
+Target repo: @webwaka/core (packages/core/src/)
+
+This phase makes four changes to the shared platform core package. Do not touch any other repo. Do all four tasks.
+
+=== CONTEXT ===
+WebWaka is a multi-repo Nigerian transport platform. @webwaka/core is the shared package imported by all repos. It currently exports: requireRole, requireTenant, getTenantId, jwtAuthMiddleware, verifyJWT, generateJWT, nanoid, formatKobo, publishEvent. The main file is packages/core/src/index.ts.
+
+=== TASK P01-T1: Consolidate ID Generation ===
+Problem: Two ID generators exist — genId() in webwaka-transport/src/api/types.ts and nanoid() in @webwaka/core. We need to standardize on nanoid in core.
+
+Steps:
+1. In packages/core/src/index.ts, verify that nanoid(prefix, length) is exported. Add a JSDoc comment: "Cloudflare Worker-compatible nanoid. Uses crypto.getRandomValues. prefix is prepended to the ID. Default length 21."
+2. Also export: export const genId = nanoid; — this alias allows the transport repo to migrate without breaking during transition.
+3. Bump the package version in packages/core/package.json (minor version bump).
+4. Run tsc --noEmit to verify zero type errors.
+
+=== TASK P01-T2: Promote Shared Query Helpers to Core ===
+Problem: parsePagination(), metaResponse(), and applyTenantScope() are defined only in the transport repo but are generic enough for any repo.
+
+Steps:
+1. Add to packages/core/src/index.ts (or a new file packages/core/src/query-helpers.ts, re-exported from index.ts):
+
+export function parsePagination(q: Record<string, string>, maxLimit = 100): { limit: number; offset: number } {
+const limit = Math.min(Math.max(parseInt(q.limit ?? '20', 10) || 20, 1), maxLimit);
+const offset = Math.max(parseInt(q.offset ?? '0', 10) || 0, 0);
+return { limit, offset };
+}
+
+export function metaResponse<T>(data: T[], total: number, limit: number, offset: number) {
+return {
+data,
+meta: {
+total,
+limit,
+offset,
+has_more: offset + limit < total,
+},
+};
+}
+
+export function applyTenantScope(
+baseQuery: string,
+params: unknown[],
+tenantId: string,
+column = 'operator_id'
+): { query: string; params: unknown[] } {
+const hasWhere = /\bWHERE\b/i.test(baseQuery);
+const clause = hasWhere ? ` AND ${column} = ?` : ` WHERE ${column} = ?`;
+return { query: baseQuery + clause, params: [...params, tenantId] };
+}
+
+2. Export all three from packages/core/src/index.ts.
+3. Run tsc --noEmit.
+
+=== TASK P01-T3: Add NDPR Consent Utility to Core ===
+Problem: NDPR consent is checked inconsistently across repos. A shared utility ensures uniformity.
+
+Steps:
+1. Create packages/core/src/ndpr.ts:
+
+import type { D1Database } from '@cloudflare/workers-types';
+
+export interface NdprConsentLog {
+id: string;
+entity_id: string;
+entity_type: string;
+consented_at: number;
+ip_address: string | null;
+user_agent: string | null;
+created_at: number;
+}
+
+export function assertNdprConsent(body: unknown): void {
+if (typeof body !== 'object' || body === null || (body as Record<string, unknown>).ndpr_consent !== true) {
+const err = new Error('NDPR consent is required');
+(err as any).status = 400;
+(err as any).code = 'NDPR_CONSENT_REQUIRED';
+throw err;
+}
+}
+
+export async function recordNdprConsent(
+db: D1Database,
+entityId: string,
+entityType: string,
+ipAddress: string | null,
+userAgent: string | null
+): Promise<void> {
+const now = Date.now();
+await db.prepare(
+`INSERT OR IGNORE INTO ndpr_consent_log (id, entity_id, entity_type, consented_at, ip_address, user_agent, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)`
+).bind(`ndpr_${now}_${Math.random().toString(36).slice(2, 7)}`, entityId, entityType, now, ipAddress, userAgent, now).run();
+}
+
+2. Re-export from packages/core/src/index.ts: export * from './ndpr';
+3. Run tsc --noEmit.
+
+=== TASK P01-T4: Add API Key Authentication Support to jwtAuthMiddleware ===
+Problem: There is no way for third-party systems to authenticate without a user JWT. API keys are the standard B2B mechanism.
+
+Steps:
+1. Add verifyApiKey to packages/core/src/index.ts (or a new auth-helpers.ts re-exported from index):
+
+export async function verifyApiKey(
+rawKey: string,
+db: D1Database
+): Promise<WakaUser | null> {
+const encoder = new TextEncoder();
+const data = encoder.encode(rawKey);
+const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+const hashArray = Array.from(new Uint8Array(hashBuffer));
+const keyHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+const row = await db.prepare(
+`SELECT ak.*, o.name as operator_name FROM api_keys ak
+JOIN operators o ON o.id = ak.operator_id
+WHERE ak.key_hash = ? AND ak.revoked_at IS NULL AND ak.deleted_at IS NULL`
+).bind(keyHash).first<{
+id: string; operator_id: string; scope: string;
+operator_name: string;
+}>();
+
+if (!row) return null;
+
+// Non-blocking: update last_used_at
+db.prepare(`UPDATE api_keys SET last_used_at = ? WHERE id = ?`)
+.bind(Date.now(), row.id).run().catch(() => {});
+
+return {
+id: row.id,
+tenant_id: row.operator_id,
+role: row.scope === 'read_write' ? 'TENANT_ADMIN' : 'STAFF',
+name: `api_key:${row.id}`,
+phone: '',
+operator_id: row.operator_id,
+} as WakaUser;
+}
+
+2. In jwtAuthMiddleware, before JWT verification, check for Authorization: ApiKey {key} header:
+
+const authHeader = c.req.header('Authorization') ?? '';
+if (authHeader.startsWith('ApiKey ')) {
+const rawKey = authHeader.slice(7).trim();
+const user = await verifyApiKey(rawKey, (c.env as any).DB);
+if (!user) return c.json({ error: 'Invalid API key' }, 401);
+c.set('user', user);
+return next();
+}
+
+3. Export verifyApiKey from the index.
+4. Run tsc --noEmit. Ensure WakaUser type includes operator_id field (add it if missing).
+
+=== DONE ===
+After all four tasks: bump core package version, run tsc --noEmit, confirm zero errors. The webwaka-transport repo will be updated to use these exports in the next phase.
