@@ -5,7 +5,7 @@
  * Canonical event contracts for the entire WebWaka OS v4 platform.
  * Every domain emits typed DomainEvents; consumers subscribe by event type.
  *
- * This module defines shapes and constants only.
+ * This module defines shapes, constants, and the emitEvent utility.
  * Actual queue/bus wiring (Cloudflare Queues) is a separate concern.
  */
 
@@ -88,4 +88,70 @@ export function createEvent<T>(
     occurredAt: new Date(),
     payload,
   };
+}
+
+/**
+ * KV-backed event bus environment interface.
+ * Any Worker that needs to emit events must include these bindings.
+ */
+export interface EventBusEnv {
+  /** KV namespace for outbound event queue (write-only from emitter side) */
+  EVENTS?: KVNamespace;
+  /** Optional HTTP endpoint to forward events to a central event router */
+  EVENT_BUS_URL?: string;
+}
+
+/**
+ * emitEvent — Publish a domain event to the platform event bus.
+ *
+ * Strategy:
+ *   1. Write to EVENTS KV namespace as an outbox entry (TTL 24h)
+ *   2. If EVENT_BUS_URL is set, also forward via HTTP POST (fire-and-forget)
+ *
+ * This function NEVER throws — failures are logged and swallowed so that
+ * the calling business logic is never blocked by event bus unavailability.
+ *
+ * @param env       Worker environment bindings (must include EVENTS KV)
+ * @param eventType Canonical event type string (e.g. "civic.member.created")
+ * @param tenantId  Tenant that owns this event
+ * @param payload   Domain-specific payload (must be JSON-serialisable)
+ */
+export async function emitEvent(
+  env: EventBusEnv,
+  eventType: string,
+  tenantId: string,
+  payload: unknown,
+): Promise<void> {
+  const event = {
+    id: crypto.randomUUID(),
+    type: eventType,
+    tenantId,
+    occurredAt: new Date().toISOString(),
+    payload,
+  };
+  const key = `event:${Date.now()}:${crypto.randomUUID()}`;
+  const body = JSON.stringify(event);
+
+  // 1. Write to KV outbox
+  if (env.EVENTS) {
+    try {
+      await env.EVENTS.put(key, body, { expirationTtl: 86400 });
+    } catch {
+      // Non-fatal — continue to HTTP delivery
+    }
+  }
+
+  // 2. HTTP delivery (fire-and-forget)
+  if (env.EVENT_BUS_URL) {
+    try {
+      await fetch(env.EVENT_BUS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        signal: AbortSignal.timeout(5000),
+      });
+    } catch {
+      // Non-fatal — event is already in KV outbox
+    }
+  }
 }

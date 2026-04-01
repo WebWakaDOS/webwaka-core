@@ -1,7 +1,7 @@
 {
   "name": "@webwaka/core",
-  "version": "1.3.0",
-  "description": "WebWaka OS v4 — Shared platform primitives: auth, RBAC, CORS, rate-limiting, event bus types, and billing utilities.",
+  "version": "1.3.2",
+  "description": "WebWaka OS v4 \u2014 Shared platform primitives: auth, RBAC, CORS, rate-limiting, event bus types, and billing utilities.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
