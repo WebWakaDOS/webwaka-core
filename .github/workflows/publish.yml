@@ -32,7 +32,7 @@ jobs:
     name: Publish to npm
     runs-on: ubuntu-latest
     needs: test
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && secrets.NPM_TOKEN != ''
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
       contents: read
       packages: write
@@ -54,7 +54,21 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build package
         run: pnpm run build
+      - name: Check if version already published
+        id: version_check
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          PKG_NAME=$(node -p "require('./package.json').name")
+          PUBLISHED=$(npm view "${PKG_NAME}@${PKG_VERSION}" version 2>/dev/null || echo "")
+          if [ "$PUBLISHED" = "$PKG_VERSION" ]; then
+            echo "already_published=true" >> $GITHUB_OUTPUT
+            echo "Version ${PKG_VERSION} already published — skipping publish step"
+          else
+            echo "already_published=false" >> $GITHUB_OUTPUT
+            echo "Version ${PKG_VERSION} not yet published — will publish"
+          fi
       - name: Publish to npm
+        if: steps.version_check.outputs.already_published == 'false'
         run: pnpm publish --no-git-checks --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
