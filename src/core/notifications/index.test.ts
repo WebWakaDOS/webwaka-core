@@ -130,6 +130,7 @@ describe('T-FND-05: sendOTP — SMS-first, Voice-fallback (standalone)', () => {
     expect(body.sms).toContain('123456');
     expect(body.api_key).toBe('termii-kv-key-abc');
     expect(body.from).toBe('WakaTest');
+    expect(body.type).toBe('plain');
     expect(body.channel).toBe('generic');
   });
 
@@ -193,18 +194,33 @@ describe('T-FND-05: sendOTP — SMS-first, Voice-fallback (standalone)', () => {
     expect(url).toBe('https://api.ng.termii.com/api/sms/otp/send/voice');
   });
 
-  it('returns failure if both SMS and Voice OTP fail', async () => {
-    // SMS fails
-    mockFetch.mockResolvedValueOnce(makeFetchResponse(false, { message: 'SMS failed' }));
-    // Voice also fails
-    mockFetch.mockResolvedValueOnce(makeFetchResponse(false, { message: 'Voice failed' }));
+  it('returns failure if both SMS and Voice OTP fail — surfaces Termii error messages', async () => {
+    // SMS fails with a Termii error body
+    mockFetch.mockResolvedValueOnce(makeFetchResponse(false, { message: 'DND restriction active' }));
+    // Voice also fails with a Termii error body
+    mockFetch.mockResolvedValueOnce(makeFetchResponse(false, { message: 'Invalid phone number for voice' }));
 
     const result = await sendOTP('2348012345678', '000000', config);
 
     expect(result.success).toBe(false);
     expect(result.channel).toBe('voice');
     expect(result.voicePin).toBeUndefined();
+    // Voice error message must be surfaced from Termii's response body, not just the HTTP status
+    expect(result.error).toBe('Invalid phone number for voice');
     expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns failure with HTTP status fallback when voice error body has no message', async () => {
+    mockFetch.mockResolvedValueOnce(makeFetchResponse(false, { message: 'SMS fail' }));
+    // Voice error body has no message field
+    mockFetch.mockResolvedValueOnce(makeFetchResponse(false, {}));
+
+    const result = await sendOTP('2348012345678', '000000', config);
+
+    expect(result.success).toBe(false);
+    expect(result.channel).toBe('voice');
+    // Falls back to the HTTP status string
+    expect(result.error).toMatch(/Termii Voice OTP error: HTTP 400/);
   });
 
   it('returns failure if both SMS and Voice OTP throw', async () => {

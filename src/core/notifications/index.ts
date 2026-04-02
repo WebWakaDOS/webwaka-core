@@ -77,6 +77,7 @@ interface TermiiVoiceOtpResponse {
   pin?: string;
   to?: string;
   smsStatus?: string;
+  message?: string;
 }
 
 // ─── Termii API URLs ──────────────────────────────────────────────────────────
@@ -207,7 +208,7 @@ async function attemptVoiceOtpDelivery(
       return {
         success: false,
         channel: 'voice',
-        error: `Termii Voice OTP error: HTTP ${res.status}`,
+        error: data?.message ?? `Termii Voice OTP error: HTTP ${res.status}`,
       };
     }
 
