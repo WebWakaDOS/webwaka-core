@@ -9,9 +9,20 @@
  *
  * Each tier is retried up to `maxRetries` times (default 2) before escalating.
  * Between attempts the engine sleeps for backoffMs * 2^attempt milliseconds.
+ *
+ * T-FND-06: Also exports `generateCompletion` — a standalone, vendor-neutral function
+ * that routes through OpenRouter and falls back to Cloudflare Workers AI
+ * (`@cf/meta/llama-3-8b-instruct`) on timeout or error.
  */
 
 import { logger } from '../logger/index.js';
+
+// ─── Shared Constants ─────────────────────────────────────────────────────────
+
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
+/** Default Cloudflare Workers AI model used as the ultimate fallback. */
+export const CF_DEFAULT_MODEL = '@cf/meta/llama-3-8b-instruct';
 
 export interface AIRequest {
   prompt: string;
@@ -205,7 +216,7 @@ export class AIEngine {
     model: string,
     provider: 'tenant-openrouter' | 'platform-openrouter'
   ): Promise<AIResponse> {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const response = await fetch(OPENROUTER_URL, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -236,7 +247,7 @@ export class AIEngine {
     apiKey: string,
     model: string
   ): Promise<ReadableStream<Uint8Array>> {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const response = await fetch(OPENROUTER_URL, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -267,7 +278,7 @@ export class AIEngine {
       throw new Error('Cloudflare AI binding not configured');
     }
 
-    const model = '@cf/meta/llama-3-8b-instruct';
+    const model = CF_DEFAULT_MODEL;
     const response = await this.cloudflareAiBinding.run(model, {
       messages: [{ role: 'user', content: prompt }],
     });
@@ -278,4 +289,141 @@ export class AIEngine {
       modelUsed: model,
     };
   }
+}
+
+// ─── T-FND-06: generateCompletion — standalone vendor-neutral function ─────────
+
+/**
+ * Configuration for `generateCompletion`.
+ * All keys must be sourced from KV or environment bindings — never hardcoded.
+ */
+export interface CompletionConfig {
+  /**
+   * OpenRouter API key. Sourced from tenant KV or platform env — never hardcoded.
+   * Used as the primary delivery path (Vendor Neutral AI invariant).
+   */
+  openRouterApiKey: string;
+  /**
+   * Cloudflare Workers AI binding (`env.AI`).
+   * Required for the `@cf/meta/llama-3-8b-instruct` fallback tier.
+   * If omitted and OpenRouter fails, `generateCompletion` throws.
+   */
+  cfAiBinding?: any;
+  /** OpenRouter model to use. Defaults to `openai/gpt-4o-mini`. */
+  model?: string;
+  /**
+   * Cloudflare Workers AI model for the fallback tier.
+   * Defaults to `@cf/meta/llama-3-8b-instruct`.
+   */
+  fallbackModel?: string;
+  /** OpenRouter request timeout in milliseconds. Defaults to 10 000 ms. */
+  timeoutMs?: number;
+}
+
+/** Result returned by `generateCompletion`. */
+export interface CompletionResult {
+  /** The generated text content. */
+  text: string;
+  /** Which provider actually served the response. */
+  provider: 'openrouter' | 'cloudflare-ai';
+  /** The exact model identifier used. */
+  modelUsed: string;
+  /**
+   * Present and `true` only when OpenRouter was abandoned due to a timeout
+   * and the Cloudflare AI fallback was used instead.
+   */
+  timedOut?: true;
+}
+
+/**
+ * T-FND-06: Vendor-neutral AI completion with automatic Cloudflare AI fallback.
+ *
+ * Routing strategy:
+ *   1. Call OpenRouter with the configured `openRouterApiKey` and a timeout.
+ *   2. If OpenRouter times out (AbortError / TimeoutError) or returns an error,
+ *      fall back to Cloudflare Workers AI (`@cf/meta/llama-3-8b-instruct` by default).
+ *   3. If `cfAiBinding` is not provided and OpenRouter fails, throw explicitly.
+ *
+ * When the fallback is triggered by a timeout, `result.timedOut === true` so
+ * callers can log or instrument the latency degradation.
+ *
+ * @param prompt  - The user prompt to complete.
+ * @param config  - Routing config. API keys must come from KV — never hardcoded.
+ */
+export async function generateCompletion(
+  prompt: string,
+  config: CompletionConfig
+): Promise<CompletionResult> {
+  const model = config.model ?? 'openai/gpt-4o-mini';
+  const timeoutMs = config.timeoutMs ?? 10_000;
+  let openRouterTimedOut = false;
+
+  // ── Primary: OpenRouter ───────────────────────────────────────────────────
+  try {
+    const signal = AbortSignal.timeout(timeoutMs);
+
+    const res = await fetch(OPENROUTER_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${config.openRouterApiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://webwaka.com',
+        'X-Title': 'WebWaka OS v4',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+      signal,
+    });
+
+    if (!res.ok) {
+      throw new Error(`OpenRouter error: HTTP ${res.status}`);
+    }
+
+    const data = await res.json() as any;
+    const text: string | undefined = data?.choices?.[0]?.message?.content;
+
+    if (typeof text !== 'string') {
+      throw new Error('OpenRouter returned unexpected response structure');
+    }
+
+    logger.info('generateCompletion: OpenRouter success', { model });
+    return { text, provider: 'openrouter', modelUsed: model };
+  } catch (err: any) {
+    if (err?.name === 'AbortError' || err?.name === 'TimeoutError') {
+      openRouterTimedOut = true;
+      logger.warn('generateCompletion: OpenRouter timed out — triggering Cloudflare AI fallback', {
+        model,
+        timeoutMs,
+      });
+    } else {
+      logger.warn('generateCompletion: OpenRouter failed — triggering Cloudflare AI fallback', {
+        model,
+        error: err?.message,
+      });
+    }
+  }
+
+  // ── Fallback: Cloudflare Workers AI ──────────────────────────────────────
+  if (!config.cfAiBinding) {
+    throw new Error(
+      'generateCompletion: OpenRouter failed and no Cloudflare AI binding was provided'
+    );
+  }
+
+  const fallbackModel = config.fallbackModel ?? CF_DEFAULT_MODEL;
+
+  const cfResponse = await config.cfAiBinding.run(fallbackModel, {
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  logger.info('generateCompletion: Cloudflare AI fallback success', { fallbackModel });
+
+  return {
+    text: cfResponse.response,
+    provider: 'cloudflare-ai',
+    modelUsed: fallbackModel,
+    ...(openRouterTimedOut ? { timedOut: true as const } : {}),
+  };
 }

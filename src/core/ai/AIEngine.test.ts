@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { AIEngine } from './AIEngine';
+import { AIEngine, generateCompletion, CF_DEFAULT_MODEL, CompletionConfig } from './AIEngine';
 import { logger } from '../logger';
 
 // Mock fetch for OpenRouter
@@ -382,5 +382,253 @@ describe('CORE-5: AIEngine (Vendor Neutral AI)', () => {
     // Access private fields via cast to validate constructor wiring
     expect((customEngine as any).maxRetries).toBe(5);
     expect((customEngine as any).backoffMs).toBe(50);
+  });
+});
+
+// ─── T-FND-06: generateCompletion — standalone vendor-neutral function ─────────
+
+describe('T-FND-06: generateCompletion — OpenRouter primary, Cloudflare AI fallback', () => {
+  let mockCfAi: any;
+
+  const baseConfig: CompletionConfig = {
+    openRouterApiKey: 'or-kv-key-from-tenant',
+    cfAiBinding: undefined, // overridden per test
+  };
+
+  function makeOpenRouterSuccess(content: string, model = 'openai/gpt-4o-mini') {
+    return {
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({
+        choices: [{ message: { content } }],
+        model,
+      }),
+    };
+  }
+
+  function makeOpenRouterError(status = 500) {
+    return {
+      ok: false,
+      status,
+      json: () => Promise.resolve({ error: { message: 'Internal Server Error' } }),
+    };
+  }
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockCfAi = {
+      run: vi.fn().mockResolvedValue({ response: 'Llama fallback response' }),
+    };
+  });
+
+  // ── OpenRouter success path ─────────────────────────────────────────────
+
+  it('returns text from OpenRouter on success with provider=openrouter', async () => {
+    (global.fetch as any).mockResolvedValueOnce(makeOpenRouterSuccess('Hello from OpenRouter'));
+
+    const result = await generateCompletion('Say hello', {
+      ...baseConfig,
+      cfAiBinding: mockCfAi,
+    });
+
+    expect(result.text).toBe('Hello from OpenRouter');
+    expect(result.provider).toBe('openrouter');
+    expect(result.modelUsed).toBe('openai/gpt-4o-mini');
+    expect(result.timedOut).toBeUndefined();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(mockCfAi.run).not.toHaveBeenCalled();
+  });
+
+  it('sends the correct OpenRouter request — Authorization, headers, model, messages', async () => {
+    (global.fetch as any).mockResolvedValueOnce(makeOpenRouterSuccess('ok'));
+
+    await generateCompletion('Test prompt', {
+      openRouterApiKey: 'or-kv-key-from-tenant',
+      cfAiBinding: mockCfAi,
+      model: 'anthropic/claude-3-haiku',
+    });
+
+    const [url, init] = (global.fetch as any).mock.calls[0];
+    expect(url).toBe('https://openrouter.ai/api/v1/chat/completions');
+    expect(init.headers['Authorization']).toBe('Bearer or-kv-key-from-tenant');
+    expect(init.headers['Content-Type']).toBe('application/json');
+    expect(init.headers['HTTP-Referer']).toBe('https://webwaka.com');
+
+    const body = JSON.parse(init.body);
+    expect(body.model).toBe('anthropic/claude-3-haiku');
+    expect(body.messages).toEqual([{ role: 'user', content: 'Test prompt' }]);
+  });
+
+  it('uses openai/gpt-4o-mini as the default OpenRouter model', async () => {
+    (global.fetch as any).mockResolvedValueOnce(makeOpenRouterSuccess('Default model response'));
+
+    const result = await generateCompletion('Hello', {
+      openRouterApiKey: 'or-key',
+      cfAiBinding: mockCfAi,
+    });
+
+    const body = JSON.parse((global.fetch as any).mock.calls[0][1].body);
+    expect(body.model).toBe('openai/gpt-4o-mini');
+    expect(result.modelUsed).toBe('openai/gpt-4o-mini');
+  });
+
+  it('passes an AbortSignal to fetch (timeout enforcement)', async () => {
+    (global.fetch as any).mockResolvedValueOnce(makeOpenRouterSuccess('ok'));
+
+    await generateCompletion('Test', {
+      openRouterApiKey: 'or-key',
+      cfAiBinding: mockCfAi,
+      timeoutMs: 5000,
+    });
+
+    const [, init] = (global.fetch as any).mock.calls[0];
+    expect(init.signal).toBeDefined();
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  // ── OpenRouter HTTP error → CF AI fallback ─────────────────────────────
+
+  it('falls back to Cloudflare AI when OpenRouter returns a non-OK HTTP status', async () => {
+    (global.fetch as any).mockResolvedValueOnce(makeOpenRouterError(503));
+
+    const result = await generateCompletion('Hello', {
+      openRouterApiKey: 'or-key',
+      cfAiBinding: mockCfAi,
+    });
+
+    expect(result.text).toBe('Llama fallback response');
+    expect(result.provider).toBe('cloudflare-ai');
+    expect(result.modelUsed).toBe(CF_DEFAULT_MODEL);
+    expect(result.timedOut).toBeUndefined();
+    expect(mockCfAi.run).toHaveBeenCalledTimes(1);
+    expect(mockCfAi.run).toHaveBeenCalledWith(CF_DEFAULT_MODEL, {
+      messages: [{ role: 'user', content: 'Hello' }],
+    });
+  });
+
+  it('falls back to Cloudflare AI when OpenRouter returns malformed response structure', async () => {
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ result: 'unexpected shape' }),
+    });
+
+    const result = await generateCompletion('Hello', {
+      openRouterApiKey: 'or-key',
+      cfAiBinding: mockCfAi,
+    });
+
+    expect(result.provider).toBe('cloudflare-ai');
+    expect(result.text).toBe('Llama fallback response');
+  });
+
+  // ── OpenRouter network error → CF AI fallback ──────────────────────────
+
+  it('falls back to Cloudflare AI when OpenRouter fetch throws a network error', async () => {
+    (global.fetch as any).mockRejectedValueOnce(new Error('ECONNREFUSED'));
+
+    const result = await generateCompletion('Hello', {
+      openRouterApiKey: 'or-key',
+      cfAiBinding: mockCfAi,
+    });
+
+    expect(result.text).toBe('Llama fallback response');
+    expect(result.provider).toBe('cloudflare-ai');
+    expect(result.timedOut).toBeUndefined();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(mockCfAi.run).toHaveBeenCalledTimes(1);
+  });
+
+  // ── OpenRouter timeout (AbortError) → CF AI fallback with timedOut: true
+
+  it('falls back to CF AI with timedOut=true when fetch throws an AbortError', async () => {
+    const abortError = new Error('The operation was aborted');
+    abortError.name = 'AbortError';
+    (global.fetch as any).mockRejectedValueOnce(abortError);
+
+    const result = await generateCompletion('Hello', {
+      openRouterApiKey: 'or-key',
+      cfAiBinding: mockCfAi,
+      timeoutMs: 100,
+    });
+
+    expect(result.provider).toBe('cloudflare-ai');
+    expect(result.text).toBe('Llama fallback response');
+    expect(result.timedOut).toBe(true);
+  });
+
+  it('falls back to CF AI with timedOut=true when fetch throws a TimeoutError', async () => {
+    const timeoutError = new Error('The request timed out');
+    timeoutError.name = 'TimeoutError';
+    (global.fetch as any).mockRejectedValueOnce(timeoutError);
+
+    const result = await generateCompletion('Hello', {
+      openRouterApiKey: 'or-key',
+      cfAiBinding: mockCfAi,
+    });
+
+    expect(result.provider).toBe('cloudflare-ai');
+    expect(result.timedOut).toBe(true);
+  });
+
+  it('does NOT set timedOut when fallback is triggered by an HTTP error (not a timeout)', async () => {
+    (global.fetch as any).mockResolvedValueOnce(makeOpenRouterError(429));
+
+    const result = await generateCompletion('Hello', {
+      openRouterApiKey: 'or-key',
+      cfAiBinding: mockCfAi,
+    });
+
+    expect(result.provider).toBe('cloudflare-ai');
+    expect(result.timedOut).toBeUndefined();
+  });
+
+  // ── Custom fallback model ───────────────────────────────────────────────
+
+  it('uses the custom fallbackModel when CF AI fallback is triggered', async () => {
+    (global.fetch as any).mockRejectedValueOnce(new Error('OpenRouter down'));
+
+    const customCfAi = {
+      run: vi.fn().mockResolvedValue({ response: 'Custom model response' }),
+    };
+
+    const result = await generateCompletion('Hello', {
+      openRouterApiKey: 'or-key',
+      cfAiBinding: customCfAi,
+      fallbackModel: '@cf/meta/llama-3.1-8b-instruct',
+    });
+
+    expect(result.modelUsed).toBe('@cf/meta/llama-3.1-8b-instruct');
+    expect(customCfAi.run).toHaveBeenCalledWith(
+      '@cf/meta/llama-3.1-8b-instruct',
+      { messages: [{ role: 'user', content: 'Hello' }] }
+    );
+    expect(result.text).toBe('Custom model response');
+  });
+
+  // ── Missing CF AI binding ───────────────────────────────────────────────
+
+  it('throws explicitly when OpenRouter fails and no cfAiBinding is provided', async () => {
+    (global.fetch as any).mockRejectedValueOnce(new Error('Network error'));
+
+    await expect(
+      generateCompletion('Hello', { openRouterApiKey: 'or-key' })
+    ).rejects.toThrow('no Cloudflare AI binding was provided');
+  });
+
+  it('throws when OpenRouter times out and no cfAiBinding is provided', async () => {
+    const abortError = new Error('aborted');
+    abortError.name = 'AbortError';
+    (global.fetch as any).mockRejectedValueOnce(abortError);
+
+    await expect(
+      generateCompletion('Hello', { openRouterApiKey: 'or-key' })
+    ).rejects.toThrow('no Cloudflare AI binding was provided');
+  });
+
+  // ── CF_DEFAULT_MODEL export ─────────────────────────────────────────────
+
+  it('CF_DEFAULT_MODEL is the expected Llama 3 instruct model', () => {
+    expect(CF_DEFAULT_MODEL).toBe('@cf/meta/llama-3-8b-instruct');
   });
 });

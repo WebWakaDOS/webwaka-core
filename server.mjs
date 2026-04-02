@@ -20,7 +20,7 @@ const html = `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <h1>@webwaka/core <span class="badge">v1.4.0</span></h1>
+  <h1>@webwaka/core <span class="badge">v1.5.0</span></h1>
   <p>WebWaka OS v4 — Shared platform primitives for building SaaS applications on the Cloudflare Workers ecosystem.</p>
 
   <h2>Core Modules</h2>

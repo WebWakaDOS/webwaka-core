@@ -5,6 +5,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.5.0] — 2026-04-02
+
+### Added — T-FND-06: `generateCompletion` — Vendor-Neutral AI with Cloudflare Fallback (`src/core/ai/AIEngine.ts`)
+
+Implements the platform-wide OpenRouter → Cloudflare Workers AI fallback for any vertical that needs AI completions without managing `AIEngine` instance tiers.
+
+#### New Exports
+
+| Export | Type | Description |
+|---|---|---|
+| `generateCompletion()` | `async function` | Standalone completion: OpenRouter primary, Cloudflare AI fallback |
+| `CompletionConfig` | TypeScript interface | Routing config — API key from KV, optional CF AI binding |
+| `CompletionResult` | TypeScript interface | Result: `text`, `provider`, `modelUsed`, optional `timedOut` |
+| `CF_DEFAULT_MODEL` | `string` constant | `@cf/meta/llama-3-8b-instruct` — shared by class and function |
+
+#### Routing Logic
+1. Call OpenRouter with `AbortSignal.timeout(timeoutMs)` (default 10 000 ms).
+2. If OpenRouter succeeds → return `{ provider: 'openrouter', ... }`.
+3. If OpenRouter times out (AbortError / TimeoutError) → fall back to CF AI, set `result.timedOut = true`.
+4. If OpenRouter returns HTTP error or malformed response → fall back to CF AI.
+5. If `cfAiBinding` is not provided and OpenRouter fails → throw explicitly with a clear message.
+
+#### Tests Added
+- 14 unit tests in `src/core/ai/AIEngine.test.ts`
+- Covers: OpenRouter success, request shape (Authorization/headers/model/messages/signal), default model, AbortSignal passed to fetch, HTTP error → CF fallback, malformed response → CF fallback, network throw → CF fallback, AbortError → CF fallback with `timedOut=true`, TimeoutError → CF fallback with `timedOut=true`, HTTP error does NOT set `timedOut`, custom `fallbackModel`, missing `cfAiBinding` throws, `CF_DEFAULT_MODEL` value.
+
+---
+
 ## [1.4.0] — 2026-04-02
 
 ### Added — T-FND-05: Termii Voice OTP Fallback (`src/core/notifications/index.ts`)
