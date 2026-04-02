@@ -11,7 +11,7 @@
  * Between attempts the engine sleeps for backoffMs * 2^attempt milliseconds.
  */
 
-import { logger } from '../logger';
+import { logger } from '../logger/index.js';
 
 export interface AIRequest {
   prompt: string;

@@ -6,7 +6,7 @@
  * Implements internal ledger for tracking tenant API/AI usage and credits.
  */
 
-import { logger } from '../logger';
+import { logger } from '../logger/index.js';
 
 export enum LedgerEntryType {
   CREDIT = 'CREDIT',

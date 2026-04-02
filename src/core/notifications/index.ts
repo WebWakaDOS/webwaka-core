@@ -6,7 +6,7 @@
  * Implements event-driven email, SMS, and push notification dispatchers.
  */
 
-import { logger } from '../logger';
+import { logger } from '../logger/index.js';
 
 export interface NotificationPayload {
   tenantId: string;
