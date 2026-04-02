@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createEvent, WebWakaEventType, type DomainEvent } from './index';
+import { createEvent, WebWakaEventType, type DomainEvent, type WebWakaEvent } from './index';
 
 describe('CORE-14: Event Bus Primitives', () => {
   // ─── createEvent ─────────────────────────────────────────────────────────
@@ -87,5 +87,56 @@ describe('CORE-14: Event Bus Primitives', () => {
   it('Notification event type values are stable strings', () => {
     expect(WebWakaEventType.NOTIFICATION_SENT).toBe('notification.sent');
     expect(WebWakaEventType.NOTIFICATION_FAILED).toBe('notification.failed');
+  });
+
+  // ─── WebWakaEvent unified schema (governance compliance) ─────────────────
+
+  it('WebWakaEvent interface has all required fields: event, tenantId, payload, timestamp', () => {
+    const evt: WebWakaEvent<{ userId: string }> = {
+      event: 'auth.user.login',
+      tenantId: 'tenant_alpha',
+      payload: { userId: 'u_1' },
+      timestamp: Date.now(),
+    };
+    expect(evt.event).toBe('auth.user.login');
+    expect(evt.tenantId).toBe('tenant_alpha');
+    expect(evt.payload.userId).toBe('u_1');
+    expect(typeof evt.timestamp).toBe('number');
+  });
+
+  it('WebWakaEvent timestamp is a number (UTC ms)', () => {
+    const before = Date.now();
+    const evt: WebWakaEvent = {
+      event: 'civic.event.created',
+      tenantId: 'tenant_beta',
+      payload: {},
+      timestamp: Date.now(),
+    };
+    const after = Date.now();
+    expect(evt.timestamp).toBeGreaterThanOrEqual(before);
+    expect(evt.timestamp).toBeLessThanOrEqual(after);
+  });
+
+  it('WebWakaEvent requires tenantId for tenant isolation', () => {
+    const evt: WebWakaEvent = {
+      event: 'parcel.created',
+      tenantId: 'tenant_logistics_1',
+      payload: { parcelId: 'p_123' },
+      timestamp: 1700000000000,
+    };
+    expect(evt.tenantId).toBe('tenant_logistics_1');
+  });
+
+  it('WebWakaEvent payload carries all event-specific context', () => {
+    interface ParcelPayload { parcelId: string; trackingNumber: string; organizationId: string }
+    const evt: WebWakaEvent<ParcelPayload> = {
+      event: 'parcel.created',
+      tenantId: 'tenant_1',
+      payload: { parcelId: 'p_001', trackingNumber: 'TRK-001', organizationId: 'org_1' },
+      timestamp: Date.now(),
+    };
+    expect(evt.payload.parcelId).toBe('p_001');
+    expect(evt.payload.trackingNumber).toBe('TRK-001');
+    expect(evt.payload.organizationId).toBe('org_1');
   });
 });

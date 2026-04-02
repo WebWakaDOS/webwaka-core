@@ -48,11 +48,33 @@ export enum WebWakaEventType {
 }
 
 /**
+ * Standard WebWaka Platform Event Bus Schema (Governance-Mandated)
+ *
+ * All events emitted to the platform event bus MUST adhere to this schema.
+ * This is the canonical interface for cross-module communication.
+ *
+ * Reference: EVENT_BUS_SCHEMA.md in webwaka-platform-docs
+ *
+ * @template T  The event-specific payload type.
+ */
+export interface WebWakaEvent<T = unknown> {
+  /** The event type (e.g., 'civic.event.created', 'parcel.created') */
+  event: string;
+  /** The ID of the tenant emitting the event */
+  tenantId: string;
+  /** The event-specific payload */
+  payload: T;
+  /** UTC Unix timestamp (ms) */
+  timestamp: number;
+}
+
+/**
  * Envelope wrapping every domain event published on the platform bus.
  *
  * `type` is constrained to `WebWakaEventType` — arbitrary strings are rejected
  * at compile time, preventing undeclared event names from entering the bus.
  *
+ * @deprecated Use WebWakaEvent<T> instead for governance compliance.
  * @template T  The event-specific payload type.
  */
 export interface DomainEvent<T = unknown> {
@@ -111,6 +133,8 @@ export interface EventBusEnv {
  * This function NEVER throws — failures are logged and swallowed so that
  * the calling business logic is never blocked by event bus unavailability.
  *
+ * Uses the standardized WebWakaEvent<T> schema for governance compliance.
+ *
  * @param env       Worker environment bindings (must include EVENTS KV)
  * @param eventType Canonical event type string (e.g. "civic.member.created")
  * @param tenantId  Tenant that owns this event
@@ -122,12 +146,11 @@ export async function emitEvent(
   tenantId: string,
   payload: unknown,
 ): Promise<void> {
-  const event = {
-    id: crypto.randomUUID(),
-    type: eventType,
+  const event: WebWakaEvent = {
+    event: eventType,
     tenantId,
-    occurredAt: new Date().toISOString(),
     payload,
+    timestamp: Date.now(),
   };
   const key = `event:${Date.now()}:${crypto.randomUUID()}`;
   const body = JSON.stringify(event);
