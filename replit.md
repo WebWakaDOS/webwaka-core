@@ -3,7 +3,7 @@
 ## Project Overview
 This is a TypeScript library package providing shared platform primitives for building SaaS applications on the Cloudflare Workers ecosystem. It is the foundational core for the WebWaka vertical suites (Fintech, Transport, Logistics, etc.).
 
-**Current version:** 1.3.0 (Phase P01-CORE complete)
+**Current version:** 1.4.0 (Phase P01-CORE complete + T-FND-05 Voice OTP fallback)
 
 ## Tech Stack
 - **Language:** TypeScript 5.x (ESM, ES2022 target)
@@ -56,7 +56,7 @@ server.mjs         — Minimal status server for Replit preview (port 5000)
 
 ## Scripts
 - `pnpm run build` — Compile TypeScript to `dist/`
-- `pnpm run test` — Run Vitest test suite (87 tests across 11 files)
+- `pnpm run test` — Run Vitest test suite (244 tests across 24 files)
 - `pnpm run lint` — Type-check without emitting
 
 ## CI/CD

@@ -5,6 +5,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.4.0] — 2026-04-02
+
+### Added — T-FND-05: Termii Voice OTP Fallback (`src/core/notifications/index.ts`)
+
+Addresses high SMS delivery failure rates on Nigerian telcos (DND registrations, carrier outages).
+
+#### New Exports
+
+| Export | Type | Description |
+|---|---|---|
+| `sendOTP()` | `async function` | Standalone OTP dispatcher: SMS-first, Voice-fallback |
+| `NotificationService.sendOTP()` | `async method` | Class-level OTP dispatch delegating to `sendOTP()` |
+| `OtpTenantConfig` | TypeScript interface | Tenant OTP config (API key sourced from KV, never hardcoded) |
+| `OtpDeliveryResult` | TypeScript interface | Result shape — includes `voicePin` when voice channel triggers |
+| `OtpDeliveryChannel` | TypeScript union type | `'sms' \| 'voice'` |
+
+#### Delivery Logic
+1. By default: attempt SMS via `POST https://api.ng.termii.com/api/sms/send` (generic channel).
+2. If SMS fails (non-OK HTTP or network throw) → automatically fall back to `POST https://api.ng.termii.com/api/sms/otp/send/voice`.
+3. If `forceVoice: true` is passed → skip SMS entirely and call Voice OTP directly.
+4. Voice OTP result includes `voicePin` (Termii-generated) — callers must reconcile their stored OTP with this value.
+
+#### Tests Added
+- 17 unit tests in `src/core/notifications/index.test.ts`
+- Covers: SMS success, SMS→voice fallback (HTTP failure), SMS→voice fallback (network throw), forceVoice bypass, both channels failing, custom message template, custom voice PIN parameters, class method with/without API key, forceVoice via class method.
+
+---
+
 ## [1.0.0] — 2026-03-23
 
 ### Added — Auth Module (`src/core/auth/index.ts`)
