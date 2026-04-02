@@ -56,7 +56,7 @@ server.mjs         — Minimal status server for Replit preview (port 5000)
 
 ## Scripts
 - `pnpm run build` — Compile TypeScript to `dist/`
-- `pnpm run test` — Run Vitest test suite (259 tests across 24 files)
+- `pnpm run test` — Run Vitest test suite (260 tests across 24 files)
 - `pnpm run lint` — Type-check without emitting
 
 ## CI/CD

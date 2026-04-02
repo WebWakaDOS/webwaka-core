@@ -35,9 +35,13 @@ import {
   // PIN
   hashPin,
   verifyPin,
-  // AI
+  // AI (OpenRouterClient — src/ai.ts)
   OpenRouterClient,
   createAiClient,
+  // AI Engine + generateCompletion (src/core/ai/AIEngine.ts)
+  AIEngine,
+  generateCompletion,
+  CF_DEFAULT_MODEL,
   // Events
   CommerceEvents,
   // Nanoid
@@ -98,6 +102,12 @@ describe('@webwaka/core barrel exports', () => {
   it('exports AI client', () => {
     expect(typeof OpenRouterClient).toBe('function');
     expect(typeof createAiClient).toBe('function');
+  });
+
+  it('exports AIEngine, generateCompletion, and CF_DEFAULT_MODEL (T-FND-06)', () => {
+    expect(typeof AIEngine).toBe('function');
+    expect(typeof generateCompletion).toBe('function');
+    expect(CF_DEFAULT_MODEL).toBe('@cf/meta/llama-3-8b-instruct');
   });
 
   it('exports CommerceEvents', () => {
