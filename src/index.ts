@@ -95,3 +95,6 @@ export * from './query-helpers.js';
 
 // ─── NDPR Consent ─────────────────────────────────────────────────────────────
 export * from './ndpr.js';
+
+// ─── UI Builder — Tenant Branding Schema (CORE-10) ───────────────────────────
+export * from './core/ui/branding.js';
