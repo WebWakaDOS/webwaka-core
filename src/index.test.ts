@@ -54,6 +54,12 @@ import {
   // NDPR
   assertNdprConsent,
   recordNdprConsent,
+  // CORE-10: UI Branding Schema
+  brandingKvKey,
+  DEFAULT_BRANDING,
+  // CORE-9: Canonical Event Types
+  WebWakaEventType,
+  createEvent,
 } from './index';
 
 describe('@webwaka/core barrel exports', () => {
@@ -129,5 +135,47 @@ describe('@webwaka/core barrel exports', () => {
   it('exports NDPR utilities', () => {
     expect(typeof assertNdprConsent).toBe('function');
     expect(typeof recordNdprConsent).toBe('function');
+  });
+
+  // ─── CORE-10: TenantBrandingSchema (ISSUE-3 fix) ─────────────────────────
+  it('exports branding utilities (CORE-10)', () => {
+    expect(typeof brandingKvKey).toBe('function');
+    expect(brandingKvKey('tenant_123')).toBe('branding:tenant_123');
+    expect(DEFAULT_BRANDING).toBeDefined();
+    expect(DEFAULT_BRANDING.colors.primary).toBe('#2563EB');
+    expect(DEFAULT_BRANDING.typography.headingFont).toBe('Inter');
+    expect(DEFAULT_BRANDING.layout.navigationStyle).toBe('top-bar');
+  });
+
+  // ─── CORE-9: Canonical Event Types (ISSUE-3 fix) ─────────────────────────
+  it('exports WebWakaEventType with UI and AI event types (CORE-9)', () => {
+    expect(WebWakaEventType.UI_TEMPLATE_CREATED).toBe('ui.template.created');
+    expect(WebWakaEventType.UI_TEMPLATE_UPDATED).toBe('ui.template.updated');
+    expect(WebWakaEventType.UI_DEPLOYMENT_REQUESTED).toBe('ui.deployment.requested');
+    expect(WebWakaEventType.UI_DEPLOYMENT_STARTED).toBe('ui.deployment.started');
+    expect(WebWakaEventType.UI_DEPLOYMENT_SUCCESS).toBe('ui.deployment.success');
+    expect(WebWakaEventType.UI_DEPLOYMENT_FAILED).toBe('ui.deployment.failed');
+    expect(WebWakaEventType.UI_BRANDING_UPDATED).toBe('ui.branding.updated');
+    expect(WebWakaEventType.AI_CAPABILITY_ENABLED).toBe('ai.capability.enabled');
+    expect(WebWakaEventType.AI_CAPABILITY_DISABLED).toBe('ai.capability.disabled');
+    expect(WebWakaEventType.AI_USAGE_RECORDED).toBe('ai.usage.recorded');
+    expect(WebWakaEventType.AI_BYOK_KEY_ADDED).toBe('ai.byok.key.added');
+    expect(WebWakaEventType.AI_BYOK_KEY_REMOVED).toBe('ai.byok.key.removed');
+  });
+
+  it('exports createEvent factory (CORE-9)', () => {
+    expect(typeof createEvent).toBe('function');
+    const event = createEvent(WebWakaEventType.AI_USAGE_RECORDED, 'tenant_test', {
+      tenantId: 'tenant_test',
+      capabilityId: 'text-generation',
+      model: 'gpt-4o-mini',
+      inputTokens: 100,
+      outputTokens: 50,
+      totalCostKobo: 250,
+      byok: false,
+    });
+    expect(event.type).toBe('ai.usage.recorded');
+    expect(event.tenantId).toBe('tenant_test');
+    expect(event.id).toBeTruthy();
   });
 });
