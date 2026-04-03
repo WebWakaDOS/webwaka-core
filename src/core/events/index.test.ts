@@ -89,6 +89,58 @@ describe('CORE-14: Event Bus Primitives', () => {
     expect(WebWakaEventType.NOTIFICATION_FAILED).toBe('notification.failed');
   });
 
+  // ─── CORE-9: UI Builder event type stability (ISSUE-4 fix) ───────────────────
+
+  it('UI Builder event type values are stable strings (CORE-9)', () => {
+    expect(WebWakaEventType.UI_TEMPLATE_CREATED).toBe('ui.template.created');
+    expect(WebWakaEventType.UI_TEMPLATE_UPDATED).toBe('ui.template.updated');
+    expect(WebWakaEventType.UI_DEPLOYMENT_REQUESTED).toBe('ui.deployment.requested');
+    expect(WebWakaEventType.UI_DEPLOYMENT_STARTED).toBe('ui.deployment.started');
+    expect(WebWakaEventType.UI_DEPLOYMENT_SUCCESS).toBe('ui.deployment.success');
+    expect(WebWakaEventType.UI_DEPLOYMENT_FAILED).toBe('ui.deployment.failed');
+    expect(WebWakaEventType.UI_BRANDING_UPDATED).toBe('ui.branding.updated');
+  });
+
+  it('AI Platform event type values are stable strings (CORE-9)', () => {
+    expect(WebWakaEventType.AI_CAPABILITY_ENABLED).toBe('ai.capability.enabled');
+    expect(WebWakaEventType.AI_CAPABILITY_DISABLED).toBe('ai.capability.disabled');
+    expect(WebWakaEventType.AI_USAGE_RECORDED).toBe('ai.usage.recorded');
+    expect(WebWakaEventType.AI_BYOK_KEY_ADDED).toBe('ai.byok.key.added');
+    expect(WebWakaEventType.AI_BYOK_KEY_REMOVED).toBe('ai.byok.key.removed');
+  });
+
+  it('UI deployment event creates a well-formed DomainEvent (CORE-9)', () => {
+    const event = createEvent(
+      WebWakaEventType.UI_DEPLOYMENT_REQUESTED,
+      'tenant_shop_1',
+      { tenantId: 'tenant_shop_1', templateId: 'tpl_commerce_001', vertical: 'commerce' }
+    );
+    expect(event.type).toBe('ui.deployment.requested');
+    expect(event.tenantId).toBe('tenant_shop_1');
+    expect(event.id).toBeTruthy();
+    expect(event.occurredAt).toBeInstanceOf(Date);
+  });
+
+  it('AI usage event creates a well-formed DomainEvent (CORE-9)', () => {
+    const event = createEvent(
+      WebWakaEventType.AI_USAGE_RECORDED,
+      'tenant_fin_1',
+      {
+        tenantId: 'tenant_fin_1',
+        capabilityId: 'text-generation',
+        model: 'gpt-4o-mini',
+        inputTokens: 200,
+        outputTokens: 80,
+        totalCostKobo: 500,
+        byok: false,
+      }
+    );
+    expect(event.type).toBe('ai.usage.recorded');
+    expect(event.tenantId).toBe('tenant_fin_1');
+    expect(event.payload.capabilityId).toBe('text-generation');
+    expect(event.payload.totalCostKobo).toBe(500);
+  });
+
   // ─── WebWakaEvent unified schema (governance compliance) ─────────────────
 
   it('WebWakaEvent interface has all required fields: event, tenantId, payload, timestamp', () => {
