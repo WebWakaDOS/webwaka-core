@@ -20,7 +20,7 @@ const html = `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <h1>@webwaka/core <span class="badge">v1.5.0</span></h1>
+  <h1>@webwaka/core <span class="badge">v1.6.1</span></h1>
   <p>WebWaka OS v4 — Shared platform primitives for building SaaS applications on the Cloudflare Workers ecosystem.</p>
 
   <h2>Core Modules</h2>
@@ -32,7 +32,9 @@ const html = `<!DOCTYPE html>
     <li><code>@webwaka/core/ai</code> — AI abstraction engine (3-tier fallback)</li>
     <li><code>@webwaka/core/notifications</code> — Unified SMS/Email (Yournotify + Termii)</li>
     <li><code>@webwaka/core/kyc</code> — KYC/KYB verification engine</li>
-    <li><code>@webwaka/core/events</code> — Event bus primitives</li>
+    <li><code>@webwaka/core/events</code> — Event bus primitives (canonical UI + AI event types)</li>
+    <li><code>@webwaka/core/events/offline-queue</code> — Browser-side Dexie.js offline event queue</li>
+    <li><code>@webwaka/core/ui</code> — TenantBrandingSchema, brandingKvKey, DEFAULT_BRANDING</li>
   </ul>
 
   <h2>Phase P01 Primitives (v1.3.0)</h2>
