@@ -3,7 +3,7 @@
 ## Project Overview
 This is a TypeScript library package providing shared platform primitives for building SaaS applications on the Cloudflare Workers ecosystem. It is the foundational core for the WebWaka vertical suites (Fintech, Transport, Logistics, etc.).
 
-**Current version:** 1.5.0 (Phase P01-CORE complete + T-FND-05 Voice OTP fallback + T-FND-06 generateCompletion)
+**Current version:** 1.6.0 (Phase P01-CORE complete + T-FND-05 Voice OTP fallback + T-FND-06 generateCompletion + Event Schema Unification + Advanced KYC)
 
 ## Tech Stack
 - **Language:** TypeScript 5.x (ESM, ES2022 target)
@@ -56,7 +56,7 @@ server.mjs         — Minimal status server for Replit preview (port 5000)
 
 ## Scripts
 - `pnpm run build` — Compile TypeScript to `dist/`
-- `pnpm run test` — Run Vitest test suite (260 tests across 24 files)
+- `pnpm run test` — Run Vitest test suite (274 tests across 24 files)
 - `pnpm run lint` — Type-check without emitting
 
 ## CI/CD
@@ -75,3 +75,9 @@ server.mjs         — Minimal status server for Replit preview (port 5000)
 - `logger/index.ts` — Worker-compatible globalThis env check; `SerializedError` type for JSON-safe error logging
 - `notifications/index.ts` — Replaced all `console.warn`/`console.error` with platform `logger` (Zero Console Logs)
 - `vitest.config.ts` — Added coverage thresholds (80/80/75/80)
+
+## Recent Enhancements
+- `core/events/index.ts` — Added Commerce (7), Logistics (6), and Civic (5) canonical event types to `WebWakaEventType` plus typed payload interfaces for each vertical
+- `core/kyc/nimc.ts` — New `verifyVNIN()` function for NIMC vNIN verification (format validation + API integration)
+- `core/kyc/nibss.ts` — New `matchBVNFace()` function for NIBSS BVN facial matching (format validation + API integration)
+- `core/kyc/index.ts` — Re-exports `verifyVNIN`, `matchBVNFace` and their types

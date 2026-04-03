@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { KYCEngine } from './index';
+import { KYCEngine, verifyVNIN, matchBVNFace } from './index';
 
 const T1 = 'tenant_alpha';
 const T2 = 'tenant_beta';
@@ -101,5 +101,105 @@ describe('CORE-12: Universal KYC/KYB Verification', () => {
     await expect(
       kycEngine.processVerification(T2, request.id)
     ).rejects.toThrow('KYC request not found');
+  });
+});
+
+// ─── verifyVNIN ───────────────────────────────────────────────────────────────
+
+describe('verifyVNIN — NIMC vNIN Verification', () => {
+  it('rejects a vNIN that is too short', async () => {
+    const result = await verifyVNIN('ABC123');
+    expect(result.verified).toBe(false);
+    expect(result.error).toMatch(/Invalid vNIN format/);
+  });
+
+  it('rejects a vNIN that is too long', async () => {
+    const result = await verifyVNIN('ABCDEF1234567890X');
+    expect(result.verified).toBe(false);
+    expect(result.error).toMatch(/Invalid vNIN format/);
+  });
+
+  it('rejects a vNIN with special characters', async () => {
+    const result = await verifyVNIN('ABCDEF12345678!@');
+    expect(result.verified).toBe(false);
+    expect(result.error).toMatch(/Invalid vNIN format/);
+  });
+
+  it('returns not-configured error when env credentials are absent', async () => {
+    const result = await verifyVNIN('ABCDEF1234567890', {});
+    expect(result.verified).toBe(false);
+    expect(result.error).toMatch(/not configured/);
+  });
+
+  it('returns the vnin in the result regardless of outcome', async () => {
+    const vnin = 'ABCDEF1234567890';
+    const result = await verifyVNIN(vnin, {});
+    expect(result.vnin).toBe(vnin);
+  });
+
+  it('accepts a valid 16-character alphanumeric vNIN and attempts API call', async () => {
+    const result = await verifyVNIN('ABCDEF1234567890', {
+      NIMC_API_KEY: 'test-key',
+      NIMC_API_URL: 'https://invalid.nimc.example.test',
+    });
+    expect(result.vnin).toBe('ABCDEF1234567890');
+    expect(result.verified).toBe(false);
+    expect(result.error).toBeDefined();
+  });
+});
+
+// ─── matchBVNFace ─────────────────────────────────────────────────────────────
+
+describe('matchBVNFace — NIBSS BVN Facial Matching', () => {
+  it('rejects a BVN with fewer than 11 digits', async () => {
+    const result = await matchBVNFace('1234567890', 'base64data');
+    expect(result.matched).toBe(false);
+    expect(result.error).toMatch(/Invalid BVN format/);
+  });
+
+  it('rejects a BVN with more than 11 digits', async () => {
+    const result = await matchBVNFace('123456789012', 'base64data');
+    expect(result.matched).toBe(false);
+    expect(result.error).toMatch(/Invalid BVN format/);
+  });
+
+  it('rejects a BVN containing non-digit characters', async () => {
+    const result = await matchBVNFace('1234567890A', 'base64data');
+    expect(result.matched).toBe(false);
+    expect(result.error).toMatch(/Invalid BVN format/);
+  });
+
+  it('rejects an empty image string', async () => {
+    const result = await matchBVNFace('12345678901', '');
+    expect(result.matched).toBe(false);
+    expect(result.error).toMatch(/Image data is required/);
+  });
+
+  it('rejects a whitespace-only image string', async () => {
+    const result = await matchBVNFace('12345678901', '   ');
+    expect(result.matched).toBe(false);
+    expect(result.error).toMatch(/Image data is required/);
+  });
+
+  it('returns not-configured error when env credentials are absent', async () => {
+    const result = await matchBVNFace('12345678901', 'base64data', {});
+    expect(result.matched).toBe(false);
+    expect(result.error).toMatch(/not configured/);
+  });
+
+  it('returns the bvn in the result regardless of outcome', async () => {
+    const bvn = '12345678901';
+    const result = await matchBVNFace(bvn, 'base64data', {});
+    expect(result.bvn).toBe(bvn);
+  });
+
+  it('accepts valid inputs and attempts the API call', async () => {
+    const result = await matchBVNFace('12345678901', 'base64imagedata', {
+      NIBSS_API_KEY: 'test-key',
+      NIBSS_API_URL: 'https://invalid.nibss.example.test',
+    });
+    expect(result.bvn).toBe('12345678901');
+    expect(result.matched).toBe(false);
+    expect(result.error).toBeDefined();
   });
 });

@@ -1,3 +1,9 @@
+export { verifyVNIN } from './nimc';
+export type { VNINVerificationResult, NIMCEnv } from './nimc';
+
+export { matchBVNFace } from './nibss';
+export type { BVNFaceMatchResult, NIBSSEnv } from './nibss';
+
 /**
  * CORE-12: Universal KYC/KYB Verification
  * Blueprint Reference: Part 10.11 (Fintech), Part 10.3 (Transport)

@@ -63,6 +63,30 @@ export enum WebWakaEventType {
   AI_USAGE_RECORDED = 'ai.usage.recorded',
   AI_BYOK_KEY_ADDED = 'ai.byok.key.added',
   AI_BYOK_KEY_REMOVED = 'ai.byok.key.removed',
+
+  // ─── Commerce ──────────────────────────────────────────────────────────────
+  COMMERCE_ORDER_CREATED = 'commerce.order.created',
+  COMMERCE_ORDER_PAID = 'commerce.order.paid',
+  COMMERCE_ORDER_FULFILLED = 'commerce.order.fulfilled',
+  COMMERCE_ORDER_CANCELLED = 'commerce.order.cancelled',
+  COMMERCE_PRODUCT_CREATED = 'commerce.product.created',
+  COMMERCE_PRODUCT_UPDATED = 'commerce.product.updated',
+  COMMERCE_INVENTORY_UPDATED = 'commerce.inventory.updated',
+
+  // ─── Logistics ─────────────────────────────────────────────────────────────
+  LOGISTICS_PARCEL_CREATED = 'logistics.parcel.created',
+  LOGISTICS_PARCEL_DISPATCHED = 'logistics.parcel.dispatched',
+  LOGISTICS_PARCEL_IN_TRANSIT = 'logistics.parcel.in_transit',
+  LOGISTICS_PARCEL_DELIVERED = 'logistics.parcel.delivered',
+  LOGISTICS_PARCEL_FAILED = 'logistics.parcel.failed',
+  LOGISTICS_ROUTE_OPTIMIZED = 'logistics.route.optimized',
+
+  // ─── Civic ─────────────────────────────────────────────────────────────────
+  CIVIC_MEMBER_CREATED = 'civic.member.created',
+  CIVIC_MEMBER_UPDATED = 'civic.member.updated',
+  CIVIC_EVENT_CREATED = 'civic.event.created',
+  CIVIC_EVENT_CANCELLED = 'civic.event.cancelled',
+  CIVIC_DUES_PAID = 'civic.dues.paid',
 }
 
 // ─── UI Builder Payload Types (CORE-9) ───────────────────────────────────────
@@ -105,7 +129,101 @@ export interface UIBrandingUpdatedPayload {
   brandingKey: string;
 }
 
-// ─── AI Platform Payload Types (CORE-9) ──────────────────────────────────────
+// ─── Commerce Payload Types ───────────────────────────────────────────────────
+
+/** Payload for commerce.order.created / commerce.order.paid / commerce.order.fulfilled / commerce.order.cancelled */
+export interface CommerceOrderPayload {
+  /** Unique order identifier */
+  orderId: string;
+  /** Customer user ID */
+  customerId: string;
+  /** Total order value in kobo (integer) */
+  totalKobo: number;
+  /** ISO 4217 currency code */
+  currency: string;
+  /** Line item identifiers */
+  productIds: string[];
+}
+
+/** Payload for commerce.product.created / commerce.product.updated */
+export interface CommerceProductPayload {
+  /** Unique product identifier */
+  productId: string;
+  /** Product name */
+  name: string;
+  /** Price in kobo (integer) */
+  priceKobo: number;
+  /** SKU or catalog reference */
+  sku?: string;
+}
+
+/** Payload for commerce.inventory.updated */
+export interface CommerceInventoryUpdatedPayload {
+  /** Product identifier */
+  productId: string;
+  /** New stock quantity after the update */
+  stockQuantity: number;
+  /** Previous stock quantity before the update */
+  previousQuantity: number;
+}
+
+// ─── Logistics Payload Types ──────────────────────────────────────────────────
+
+/** Payload for logistics.parcel.created / dispatched / in_transit / delivered / failed */
+export interface LogisticsParcelPayload {
+  /** Unique parcel identifier */
+  parcelId: string;
+  /** Human-readable tracking number */
+  trackingNumber: string;
+  /** Organisation that owns the parcel */
+  organizationId: string;
+  /** Destination address (free-form) */
+  destination?: string;
+}
+
+/** Payload for logistics.route.optimized */
+export interface LogisticsRouteOptimizedPayload {
+  /** Route plan identifier */
+  routeId: string;
+  /** Ordered list of parcel IDs in the optimized sequence */
+  parcelIds: string[];
+  /** Estimated total distance in kilometres */
+  estimatedDistanceKm?: number;
+}
+
+// ─── Civic Payload Types ──────────────────────────────────────────────────────
+
+/** Payload for civic.member.created / civic.member.updated */
+export interface CivicMemberPayload {
+  /** Unique member identifier */
+  memberId: string;
+  /** Full name of the member */
+  fullName: string;
+  /** Membership tier or category */
+  tier?: string;
+}
+
+/** Payload for civic.event.created / civic.event.cancelled */
+export interface CivicEventPayload {
+  /** Unique civic event identifier */
+  eventId: string;
+  /** Title of the civic event */
+  title: string;
+  /** Scheduled date/time in ISO 8601 format */
+  scheduledAt: string;
+  /** Venue or location description */
+  venue?: string;
+}
+
+/** Payload for civic.dues.paid */
+export interface CivicDuesPaidPayload {
+  /** Member who paid their dues */
+  memberId: string;
+  /** Amount paid in kobo (integer) */
+  amountKobo: number;
+  /** Dues period (e.g. "2026-Q1") */
+  period: string;
+}
 
 /** Payload for ai.capability.enabled / ai.capability.disabled */
 export interface AICapabilityTogglePayload {
