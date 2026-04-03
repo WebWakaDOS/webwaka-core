@@ -56,7 +56,7 @@ server.mjs         — Minimal status server for Replit preview (port 5000)
 
 ## Scripts
 - `pnpm run build` — Compile TypeScript to `dist/`
-- `pnpm run test` — Run Vitest test suite (274 tests across 24 files)
+- `pnpm run test` — Run Vitest test suite (289 tests across 25 files)
 - `pnpm run lint` — Type-check without emitting
 
 ## CI/CD
@@ -81,3 +81,6 @@ server.mjs         — Minimal status server for Replit preview (port 5000)
 - `core/kyc/nimc.ts` — New `verifyVNIN()` function for NIMC vNIN verification (format validation + API integration)
 - `core/kyc/nibss.ts` — New `matchBVNFace()` function for NIBSS BVN facial matching (format validation + API integration)
 - `core/kyc/index.ts` — Re-exports `verifyVNIN`, `matchBVNFace` and their types
+- `core/events/offline-queue.ts` — New `OfflineEventQueue` class (browser/service-worker companion): IndexedDB persistence via Dexie.js when offline, direct HTTP delivery when online, `sync()` to flush queued events on reconnect
+- `core/events/index.ts` — Re-exports `OfflineEventQueue` and `SyncResult`
+- `package.json` — Added `dexie` as an optional peer dependency (>=4.0.0)

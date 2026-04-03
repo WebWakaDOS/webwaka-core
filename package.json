@@ -1,7 +1,7 @@
 {
   "name": "@webwaka/core",
   "version": "1.6.0",
-  "description": "WebWaka OS v4 \u2014 Shared platform primitives: auth, RBAC, CORS, rate-limiting, event bus types, and billing utilities.",
+  "description": "WebWaka OS v4 — Shared platform primitives: auth, RBAC, CORS, rate-limiting, event bus types, and billing utilities.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -68,11 +68,18 @@
     "prepublishOnly": "pnpm run build"
   },
   "peerDependencies": {
+    "dexie": ">=4.0.0",
     "hono": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "dexie": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260317.1",
     "@vitest/coverage-v8": "^1.6.1",
+    "dexie": "^4.4.2",
     "hono": "^4.12.9",
     "typescript": "^5.9.3",
     "vitest": "^1.6.1"

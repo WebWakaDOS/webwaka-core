@@ -251,6 +251,9 @@ export interface AIUsageRecordedPayload {
   estimatedCostUsd?: number;
 }
 
+export { OfflineEventQueue } from './offline-queue';
+export type { SyncResult } from './offline-queue';
+
 /**
  * Standard WebWaka Platform Event Bus Schema (Governance-Mandated)
  *
