@@ -1,5 +1,5 @@
 /**
- * CORE-14: Event Bus Primitives
+ * CORE-14 + CORE-9: Event Bus Primitives
  * Blueprint Reference: Part 2 (Platform Architecture — "Event-Driven: NO direct inter-DB access")
  *
  * Canonical event contracts for the entire WebWaka OS v4 platform.
@@ -7,6 +7,8 @@
  *
  * This module defines shapes, constants, and the emitEvent utility.
  * Actual queue/bus wiring (Cloudflare Queues) is a separate concern.
+ *
+ * CORE-9 additions: UI Builder and AI Platform event types + typed payloads.
  */
 
 /**
@@ -45,6 +47,90 @@ export enum WebWakaEventType {
   // ─── Notification ──────────────────────────────────────────────────────────
   NOTIFICATION_SENT = 'notification.sent',
   NOTIFICATION_FAILED = 'notification.failed',
+
+  // ─── UI Builder (CORE-9) ───────────────────────────────────────────────────
+  UI_TEMPLATE_CREATED = 'ui.template.created',
+  UI_TEMPLATE_UPDATED = 'ui.template.updated',
+  UI_DEPLOYMENT_REQUESTED = 'ui.deployment.requested',
+  UI_DEPLOYMENT_STARTED = 'ui.deployment.started',
+  UI_DEPLOYMENT_SUCCESS = 'ui.deployment.success',
+  UI_DEPLOYMENT_FAILED = 'ui.deployment.failed',
+  UI_BRANDING_UPDATED = 'ui.branding.updated',
+
+  // ─── AI Platform (CORE-9) ──────────────────────────────────────────────────
+  AI_CAPABILITY_ENABLED = 'ai.capability.enabled',
+  AI_CAPABILITY_DISABLED = 'ai.capability.disabled',
+  AI_USAGE_RECORDED = 'ai.usage.recorded',
+  AI_BYOK_KEY_ADDED = 'ai.byok.key.added',
+  AI_BYOK_KEY_REMOVED = 'ai.byok.key.removed',
+}
+
+// ─── UI Builder Payload Types (CORE-9) ───────────────────────────────────────
+
+/** Payload for ui.deployment.requested */
+export interface UIDeploymentRequestedPayload {
+  /** Unique deployment request ID */
+  deploymentId: string;
+  /** The template identifier to deploy */
+  templateId: string;
+  /** Tenant-specific branding and configuration */
+  config: Record<string, unknown>;
+  /** Optional custom domain for the deployment */
+  customDomain?: string;
+}
+
+/** Payload for ui.deployment.success */
+export interface UIDeploymentSuccessPayload {
+  /** Unique deployment request ID (matches requested event) */
+  deploymentId: string;
+  /** The public URL of the deployed site */
+  deploymentUrl: string;
+  /** Cloudflare Pages project name */
+  pagesProjectName: string;
+}
+
+/** Payload for ui.deployment.failed */
+export interface UIDeploymentFailedPayload {
+  /** Unique deployment request ID (matches requested event) */
+  deploymentId: string;
+  /** Human-readable error description */
+  error: string;
+  /** Raw error details for debugging */
+  details?: unknown;
+}
+
+/** Payload for ui.branding.updated */
+export interface UIBrandingUpdatedPayload {
+  /** The KV key where the new branding config was stored */
+  brandingKey: string;
+}
+
+// ─── AI Platform Payload Types (CORE-9) ──────────────────────────────────────
+
+/** Payload for ai.capability.enabled / ai.capability.disabled */
+export interface AICapabilityTogglePayload {
+  /** The capability identifier (e.g., 'ai.commerce.product_description_generator') */
+  capabilityId: string;
+  /** The role or subscription tier this applies to, if scoped */
+  scope?: string;
+}
+
+/** Payload for ai.usage.recorded — consumed by webwaka-central-mgmt for billing */
+export interface AIUsageRecordedPayload {
+  /** The capability that was invoked */
+  capabilityId: string;
+  /** The AI model that served the request */
+  model: string;
+  /** Number of prompt tokens consumed */
+  promptTokens: number;
+  /** Number of completion tokens generated */
+  completionTokens: number;
+  /** Total tokens (promptTokens + completionTokens) */
+  totalTokens: number;
+  /** Whether the request used the tenant's own BYOK key */
+  usedByok: boolean;
+  /** Estimated cost in USD (for platform billing reference) */
+  estimatedCostUsd?: number;
 }
 
 /**
