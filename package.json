@@ -1,6 +1,6 @@
 {
   "name": "@webwaka/core",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "WebWaka OS v4 — Shared platform primitives: auth, RBAC, CORS, rate-limiting, event bus types, and billing utilities.",
   "type": "module",
   "main": "./dist/index.js",
@@ -57,6 +57,14 @@
     "./booking": {
       "import": "./dist/core/booking/index.js",
       "types": "./dist/core/booking/index.d.ts"
+    },
+    "./events/offline-queue": {
+      "import": "./dist/core/events/offline-queue.js",
+      "types": "./dist/core/events/offline-queue.d.ts"
+    },
+    "./ui": {
+      "import": "./dist/core/ui/branding.js",
+      "types": "./dist/core/ui/branding.d.ts"
     }
   },
   "scripts": {
