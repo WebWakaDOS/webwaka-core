@@ -5,8 +5,13 @@
  * Provides `verifyVNIN()` for validating Nigerian virtual National
  * Identification Numbers (vNIN) via the NIMC API.
  *
- * In production, set NIMC_API_KEY and NIMC_API_URL in the Worker environment.
- * This module validates format locally and delegates verification to the API.
+ * Security: callers MUST supply either `ADMIN_API_KEY` or `TENANT_SECRET`
+ * in the env. The function will return `{ verified: false }` with an
+ * Unauthorized error message if neither is present — no PII is logged.
+ *
+ * PII Policy: this module NEVER passes the raw vNIN, name, DOB, or any other
+ * personal data to the platform logger. Only non-PII operational status
+ * messages (e.g. auth failure) are emitted when logging is required.
  */
 
 export interface VNINVerificationResult {
@@ -27,7 +32,17 @@ export interface VNINVerificationResult {
 }
 
 export interface NIMCEnv {
-  /** NIMC API key for authenticating vNIN verification requests */
+  /**
+   * Platform admin API key — grants authority to invoke KYC primitives.
+   * At least one of `ADMIN_API_KEY` or `TENANT_SECRET` is required.
+   */
+  ADMIN_API_KEY?: string;
+  /**
+   * Tenant-scoped secret — alternative to ADMIN_API_KEY for tenant-level auth.
+   * At least one of `ADMIN_API_KEY` or `TENANT_SECRET` is required.
+   */
+  TENANT_SECRET?: string;
+  /** NIMC API key for authenticating vNIN verification requests with NIMC */
   NIMC_API_KEY?: string;
   /** Base URL of the NIMC verification API */
   NIMC_API_URL?: string;
@@ -44,16 +59,23 @@ function isValidVNINFormat(vnin: string): boolean {
 /**
  * verifyVNIN — Verify a Nigerian virtual National Identification Number.
  *
- * Validates format locally, then calls the NIMC API.
+ * Execution order:
+ *   1. Format validation (no auth required — cheap local check)
+ *   2. Platform auth check (ADMIN_API_KEY or TENANT_SECRET)
+ *   3. NIMC integration credential check
+ *   4. NIMC API call
+ *
  * Returns a structured result — never throws for expected failure cases.
+ * No PII is ever passed to the platform logger.
  *
  * @param vnin  The 16-character vNIN to verify.
- * @param env   Worker environment with NIMC_API_KEY and NIMC_API_URL.
+ * @param env   Worker environment bindings.
  */
 export async function verifyVNIN(
   vnin: string,
   env: NIMCEnv = {},
 ): Promise<VNINVerificationResult> {
+  // 1. Format validation
   if (!isValidVNINFormat(vnin)) {
     return {
       vnin,
@@ -62,6 +84,16 @@ export async function verifyVNIN(
     };
   }
 
+  // 2. Platform auth — ADMIN_API_KEY or TENANT_SECRET required
+  if (!env.ADMIN_API_KEY && !env.TENANT_SECRET) {
+    return {
+      vnin,
+      verified: false,
+      error: 'Unauthorized: ADMIN_API_KEY or TENANT_SECRET is required to invoke KYC primitives',
+    };
+  }
+
+  // 3. NIMC integration credentials
   if (!env.NIMC_API_KEY || !env.NIMC_API_URL) {
     return {
       vnin,
@@ -70,6 +102,7 @@ export async function verifyVNIN(
     };
   }
 
+  // 4. NIMC API call — PII (vnin) sent only to the trusted NIMC endpoint, never to logger
   try {
     const response = await fetch(`${env.NIMC_API_URL}/vnin/verify`, {
       method: 'POST',

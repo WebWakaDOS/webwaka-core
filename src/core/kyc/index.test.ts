@@ -107,6 +107,7 @@ describe('CORE-12: Universal KYC/KYB Verification', () => {
 // ─── verifyVNIN ───────────────────────────────────────────────────────────────
 
 describe('verifyVNIN — NIMC vNIN Verification', () => {
+  // Format validation (no auth required — runs before the auth check)
   it('rejects a vNIN that is too short', async () => {
     const result = await verifyVNIN('ABC123');
     expect(result.verified).toBe(false);
@@ -125,21 +126,50 @@ describe('verifyVNIN — NIMC vNIN Verification', () => {
     expect(result.error).toMatch(/Invalid vNIN format/);
   });
 
-  it('returns not-configured error when env credentials are absent', async () => {
+  // Auth validation (QA-SEC-1)
+  it('returns Unauthorized when neither ADMIN_API_KEY nor TENANT_SECRET is present', async () => {
     const result = await verifyVNIN('ABCDEF1234567890', {});
+    expect(result.verified).toBe(false);
+    expect(result.error).toMatch(/Unauthorized/);
+  });
+
+  it('returns Unauthorized when env is omitted entirely', async () => {
+    const result = await verifyVNIN('ABCDEF1234567890');
+    expect(result.verified).toBe(false);
+    expect(result.error).toMatch(/Unauthorized/);
+  });
+
+  it('passes the auth check when ADMIN_API_KEY is present', async () => {
+    // Without API creds it should reach the "not configured" step, not Unauthorized
+    const result = await verifyVNIN('ABCDEF1234567890', { ADMIN_API_KEY: 'admin-key' });
+    expect(result.error).toMatch(/not configured/);
+    expect(result.error).not.toMatch(/Unauthorized/);
+  });
+
+  it('passes the auth check when TENANT_SECRET is present', async () => {
+    const result = await verifyVNIN('ABCDEF1234567890', { TENANT_SECRET: 'tenant-secret' });
+    expect(result.error).toMatch(/not configured/);
+    expect(result.error).not.toMatch(/Unauthorized/);
+  });
+
+  // NIMC integration credential check
+  it('returns not-configured error when NIMC credentials are absent but auth is present', async () => {
+    const result = await verifyVNIN('ABCDEF1234567890', { ADMIN_API_KEY: 'admin-key' });
     expect(result.verified).toBe(false);
     expect(result.error).toMatch(/not configured/);
   });
 
+  // Result shape
   it('returns the vnin in the result regardless of outcome', async () => {
     const vnin = 'ABCDEF1234567890';
-    const result = await verifyVNIN(vnin, {});
+    const result = await verifyVNIN(vnin, { ADMIN_API_KEY: 'admin-key' });
     expect(result.vnin).toBe(vnin);
   });
 
-  it('accepts a valid 16-character alphanumeric vNIN and attempts API call', async () => {
+  it('accepts a valid vNIN with full credentials and attempts the API call', async () => {
     const result = await verifyVNIN('ABCDEF1234567890', {
-      NIMC_API_KEY: 'test-key',
+      ADMIN_API_KEY: 'admin-key',
+      NIMC_API_KEY: 'nimc-key',
       NIMC_API_URL: 'https://invalid.nimc.example.test',
     });
     expect(result.vnin).toBe('ABCDEF1234567890');
@@ -151,6 +181,7 @@ describe('verifyVNIN — NIMC vNIN Verification', () => {
 // ─── matchBVNFace ─────────────────────────────────────────────────────────────
 
 describe('matchBVNFace — NIBSS BVN Facial Matching', () => {
+  // Format / input validation (runs before auth)
   it('rejects a BVN with fewer than 11 digits', async () => {
     const result = await matchBVNFace('1234567890', 'base64data');
     expect(result.matched).toBe(false);
@@ -181,21 +212,43 @@ describe('matchBVNFace — NIBSS BVN Facial Matching', () => {
     expect(result.error).toMatch(/Image data is required/);
   });
 
-  it('returns not-configured error when env credentials are absent', async () => {
+  // Auth validation (QA-SEC-1)
+  it('returns Unauthorized when neither ADMIN_API_KEY nor TENANT_SECRET is present', async () => {
     const result = await matchBVNFace('12345678901', 'base64data', {});
+    expect(result.matched).toBe(false);
+    expect(result.error).toMatch(/Unauthorized/);
+  });
+
+  it('passes the auth check when ADMIN_API_KEY is present', async () => {
+    const result = await matchBVNFace('12345678901', 'base64data', { ADMIN_API_KEY: 'admin-key' });
+    expect(result.error).toMatch(/not configured/);
+    expect(result.error).not.toMatch(/Unauthorized/);
+  });
+
+  it('passes the auth check when TENANT_SECRET is present', async () => {
+    const result = await matchBVNFace('12345678901', 'base64data', { TENANT_SECRET: 'secret' });
+    expect(result.error).toMatch(/not configured/);
+    expect(result.error).not.toMatch(/Unauthorized/);
+  });
+
+  // NIBSS integration credential check
+  it('returns not-configured error when NIBSS credentials are absent but auth is present', async () => {
+    const result = await matchBVNFace('12345678901', 'base64data', { ADMIN_API_KEY: 'admin-key' });
     expect(result.matched).toBe(false);
     expect(result.error).toMatch(/not configured/);
   });
 
+  // Result shape
   it('returns the bvn in the result regardless of outcome', async () => {
     const bvn = '12345678901';
-    const result = await matchBVNFace(bvn, 'base64data', {});
+    const result = await matchBVNFace(bvn, 'base64data', { ADMIN_API_KEY: 'admin-key' });
     expect(result.bvn).toBe(bvn);
   });
 
-  it('accepts valid inputs and attempts the API call', async () => {
+  it('accepts valid inputs with full credentials and attempts the API call', async () => {
     const result = await matchBVNFace('12345678901', 'base64imagedata', {
-      NIBSS_API_KEY: 'test-key',
+      ADMIN_API_KEY: 'admin-key',
+      NIBSS_API_KEY: 'nibss-key',
       NIBSS_API_URL: 'https://invalid.nibss.example.test',
     });
     expect(result.bvn).toBe('12345678901');

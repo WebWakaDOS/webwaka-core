@@ -53,29 +53,59 @@ describe('syncCACRegistry — CAC Company Registry KYB', () => {
     expect(result.rcNumber).toBe('RC1234567');
   });
 
-  // ── Missing credentials ──────────────────────────────────────────────────────
+  // ── Auth validation (QA-SEC-1) ───────────────────────────────────────────────
 
-  it('returns a not-configured error when both credentials are absent', async () => {
+  it('returns Unauthorized when neither ADMIN_API_KEY nor TENANT_SECRET is present', async () => {
     const result = await syncCACRegistry(VALID_RC, {});
     expect(result.verified).toBe(false);
-    expect(result.error).toMatch(/not configured/);
+    expect(result.error).toMatch(/Unauthorized/);
   });
 
-  it('returns a not-configured error when only CAC_API_KEY is set', async () => {
-    const result = await syncCACRegistry(VALID_RC, { CAC_API_KEY: 'key' });
+  it('returns Unauthorized when env is omitted entirely', async () => {
+    const result = await syncCACRegistry(VALID_RC);
+    expect(result.verified).toBe(false);
+    expect(result.error).toMatch(/Unauthorized/);
+  });
+
+  it('passes the auth check when ADMIN_API_KEY is present', async () => {
+    const result = await syncCACRegistry(VALID_RC, { ADMIN_API_KEY: 'admin-key' });
+    expect(result.error).toMatch(/not configured/);
+    expect(result.error).not.toMatch(/Unauthorized/);
+  });
+
+  it('passes the auth check when TENANT_SECRET is present', async () => {
+    const result = await syncCACRegistry(VALID_RC, { TENANT_SECRET: 'secret' });
+    expect(result.error).toMatch(/not configured/);
+    expect(result.error).not.toMatch(/Unauthorized/);
+  });
+
+  // ── CAC integration credentials ──────────────────────────────────────────────
+
+  it('returns a not-configured error when CAC_API_KEY is absent but auth is present', async () => {
+    const result = await syncCACRegistry(VALID_RC, {
+      ADMIN_API_KEY: 'admin-key',
+      CAC_API_URL: 'https://api.example.test',
+    });
     expect(result.verified).toBe(false);
     expect(result.error).toMatch(/not configured/);
   });
 
-  it('returns a not-configured error when only CAC_API_URL is set', async () => {
-    const result = await syncCACRegistry(VALID_RC, { CAC_API_URL: 'https://api.example.test' });
+  it('returns a not-configured error when CAC_API_URL is absent but auth is present', async () => {
+    const result = await syncCACRegistry(VALID_RC, {
+      ADMIN_API_KEY: 'admin-key',
+      CAC_API_KEY: 'key',
+    });
     expect(result.verified).toBe(false);
     expect(result.error).toMatch(/not configured/);
   });
 
   // ── API interaction ──────────────────────────────────────────────────────────
 
-  const env = { CAC_API_KEY: 'test-key', CAC_API_URL: 'https://api.cac.example.test' };
+  const env = {
+    ADMIN_API_KEY: 'admin-key',
+    CAC_API_KEY: 'test-key',
+    CAC_API_URL: 'https://api.cac.example.test',
+  };
 
   it('calls the CAC API with normalized RC Number and correct headers', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
@@ -156,13 +186,13 @@ describe('syncCACRegistry — CAC Company Registry KYB', () => {
   });
 
   it('accepts 4-digit minimum RC Numbers', async () => {
-    const result = await syncCACRegistry('1234', {});
+    const result = await syncCACRegistry('1234', { ADMIN_API_KEY: 'admin-key' });
     expect(result.rcNumber).toBe('RC1234');
     expect(result.error).toMatch(/not configured/);
   });
 
   it('accepts 8-digit maximum RC Numbers', async () => {
-    const result = await syncCACRegistry('12345678', {});
+    const result = await syncCACRegistry('12345678', { ADMIN_API_KEY: 'admin-key' });
     expect(result.rcNumber).toBe('RC12345678');
     expect(result.error).toMatch(/not configured/);
   });

@@ -5,10 +5,13 @@
  * Provides `syncCACRegistry()` for verifying Nigerian company registrations
  * via the Corporate Affairs Commission (CAC) API.
  *
- * CAC is the federal agency that registers and regulates companies and
- * business names in Nigeria. RC Numbers uniquely identify registered entities.
+ * Security: callers MUST supply either `ADMIN_API_KEY` or `TENANT_SECRET`
+ * in the env. The function will return `{ verified: false }` with an
+ * Unauthorized error message if neither is present — no PII is logged.
  *
- * In production, set CAC_API_KEY and CAC_API_URL in the Worker environment.
+ * PII Policy: this module NEVER passes RC Numbers, company names, director
+ * names, or other sensitive business data to the platform logger. Only
+ * non-PII operational status messages are emitted when logging is required.
  */
 
 /** Registered company types as defined by the CAC. */
@@ -58,6 +61,16 @@ export interface CACVerificationResult {
 
 /** Worker environment bindings required by `syncCACRegistry()`. */
 export interface CACEnv {
+  /**
+   * Platform admin API key — grants authority to invoke KYB primitives.
+   * At least one of `ADMIN_API_KEY` or `TENANT_SECRET` is required.
+   */
+  ADMIN_API_KEY?: string;
+  /**
+   * Tenant-scoped secret — alternative to ADMIN_API_KEY for tenant-level auth.
+   * At least one of `ADMIN_API_KEY` or `TENANT_SECRET` is required.
+   */
+  TENANT_SECRET?: string;
   /** API key for authenticating CAC registry requests */
   CAC_API_KEY?: string;
   /** Base URL of the CAC verification API */
@@ -84,20 +97,24 @@ function normalizeRCNumber(rcNumber: string): string {
 /**
  * syncCACRegistry — Verify a Nigerian company registration via the CAC API.
  *
- * Validates the RC Number format locally, then calls the CAC API to confirm
- * the company is registered and active. Returns a structured result with
- * company details on success.
+ * Execution order:
+ *   1. RC Number format validation
+ *   2. Platform auth check (ADMIN_API_KEY or TENANT_SECRET)
+ *   3. CAC integration credential check
+ *   4. CAC API call
  *
- * This function NEVER throws for expected failure modes — all errors are
- * captured in `result.error` so callers are never blocked by KYB failures.
+ * Returns a structured result with company details on success.
+ * Never throws for expected failure modes — all errors are captured in `result.error`.
+ * No PII (RC Number, company name, directors) is ever passed to the platform logger.
  *
  * @param rcNumber  The company RC Number to verify (e.g. "RC1234567").
- * @param env       Worker environment with CAC_API_KEY and CAC_API_URL.
+ * @param env       Worker environment bindings.
  */
 export async function syncCACRegistry(
   rcNumber: string,
   env: CACEnv = {},
 ): Promise<CACVerificationResult> {
+  // 1. RC Number format validation
   if (!isValidRCNumber(rcNumber)) {
     return {
       rcNumber,
@@ -108,6 +125,16 @@ export async function syncCACRegistry(
 
   const normalized = normalizeRCNumber(rcNumber);
 
+  // 2. Platform auth — ADMIN_API_KEY or TENANT_SECRET required
+  if (!env.ADMIN_API_KEY && !env.TENANT_SECRET) {
+    return {
+      rcNumber: normalized,
+      verified: false,
+      error: 'Unauthorized: ADMIN_API_KEY or TENANT_SECRET is required to invoke KYB primitives',
+    };
+  }
+
+  // 3. CAC integration credentials
   if (!env.CAC_API_KEY || !env.CAC_API_URL) {
     return {
       rcNumber: normalized,
@@ -116,6 +143,7 @@ export async function syncCACRegistry(
     };
   }
 
+  // 4. CAC API call — business data sent only to the trusted CAC endpoint, never to logger
   try {
     const response = await fetch(`${env.CAC_API_URL}/company/verify`, {
       method: 'POST',
