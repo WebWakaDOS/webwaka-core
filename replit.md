@@ -56,7 +56,7 @@ server.mjs         — Minimal status server for Replit preview (port 5000)
 
 ## Scripts
 - `pnpm run build` — Compile TypeScript to `dist/`
-- `pnpm run test` — Run Vitest test suite (289 tests across 25 files)
+- `pnpm run test` — Run Vitest test suite (333 tests across 27 files)
 - `pnpm run lint` — Type-check without emitting
 
 ## CI/CD
@@ -84,3 +84,7 @@ server.mjs         — Minimal status server for Replit preview (port 5000)
 - `core/events/offline-queue.ts` — New `OfflineEventQueue` class (browser/service-worker companion): IndexedDB persistence via Dexie.js when offline, direct HTTP delivery when online, `sync()` to flush queued events on reconnect
 - `core/events/index.ts` — Re-exports `OfflineEventQueue` and `SyncResult`
 - `package.json` — Added `dexie` as an optional peer dependency (>=4.0.0)
+- `core/kyc/cac.ts` — New `syncCACRegistry()` function for KYB via CAC API (RC Number format validation, API integration, company data + status)
+- `core/kyc/index.ts` — Re-exports `syncCACRegistry`, `CACCompany`, `CACVerificationResult`, `CACEnv`
+- `conflict-resolver.ts` — New `resolveConflict()` with three auto-merge strategies: `last-write-wins`, `field-merge` (remote wins on conflicts), `reject`
+- `index.ts` — Re-exports `resolveConflict`, `ConflictResolutionStrategy`, `VersionedRecord`, `ConflictResolutionResult`

@@ -75,6 +75,9 @@ export * from './rate-limit.js';
 // ─── Optimistic Lock ──────────────────────────────────────────────────────────
 export * from './optimistic-lock.js';
 
+// ─── Conflict Resolver ────────────────────────────────────────────────────────
+export * from './conflict-resolver.js';
+
 // ─── PIN Hashing ──────────────────────────────────────────────────────────────
 export * from './pin.js';
 
