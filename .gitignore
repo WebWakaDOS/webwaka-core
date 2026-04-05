@@ -4,3 +4,8 @@ dist/
 package-lock.json
 .pnpm-store/
 coverage/
+# Cloudflare Wrangler temp files
+.wrangler/
+
+# Local secrets — never commit
+.dev.vars
